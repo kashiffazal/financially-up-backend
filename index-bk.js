@@ -13,23 +13,19 @@
  *   Production:  npm start
  */
 
-const fs = require("fs");
 const path = require("path");
 const dotenv = require("dotenv");
 
 // Load environment variables based on NODE_ENV
 // Default to 'development' if NODE_ENV is not set
-const envFile = process.env.NODE_ENV === "production" ? ".env.production" : ".env.development";
-const envPath = path.resolve(__dirname, envFile);
+const envFile =
+  process.env.NODE_ENV === "production"
+    ? ".env.production"
+    : ".env.development";
 
-// Only load from file if it exists locally. 
-// Otherwise rely on system environment variables (e.g., Hostinger hPanel).
-if (fs.existsSync(envPath)) {
-  dotenv.config({ path: envPath });
-  console.log(`📄 Loaded environment variables from: ${envFile}`);
-} else {
-  console.log(`📄 No ${envFile} file found. Relying on system environment variables.`);
-}
+dotenv.config({ path: path.resolve(__dirname, envFile) });
+
+console.log(`📄 Loaded environment: ${envFile}`);
 
 // Import the configured Express app and Sequelize instance
 const app = require("./app");
