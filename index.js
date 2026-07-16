@@ -19,16 +19,21 @@ const dotenv = require("dotenv");
 
 // Load environment variables based on NODE_ENV
 // Default to 'development' if NODE_ENV is not set
-const envFile = process.env.NODE_ENV === "production" ? ".env.production" : ".env.development";
+const envFile =
+  process.env.NODE_ENV === "production"
+    ? ".env.production"
+    : ".env.development";
 const envPath = path.resolve(__dirname, envFile);
 
-// Only load from file if it exists locally. 
+// Only load from file if it exists locally.
 // Otherwise rely on system environment variables (e.g., Hostinger hPanel).
 if (fs.existsSync(envPath)) {
   dotenv.config({ path: envPath });
   console.log(`📄 Loaded environment variables from: ${envFile}`);
 } else {
-  console.log(`📄 No ${envFile} file found. Relying on system environment variables.`);
+  console.log(
+    `📄 No ${envFile} file found. Relying on system environment variables.`,
+  );
 }
 
 // Import the configured Express app and Sequelize instance
@@ -45,6 +50,16 @@ const PORT = process.env.PORT || 5000;
  */
 const startServer = async () => {
   try {
+    console.log("========== DATABASE ==========");
+    console.log({
+      DB_HOST: process.env.DB_HOST,
+      DB_PORT: process.env.DB_PORT,
+      DB_NAME: process.env.DB_NAME,
+      DB_USER: process.env.DB_USER,
+      DB_PASSWORD: process.env.DB_PASSWORD,
+    });
+    console.log("==============================");
+
     // Test database connection
     await sequelize.authenticate();
     console.log("✅ Database connection established successfully.");
