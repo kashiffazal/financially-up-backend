@@ -9,7 +9,7 @@
  * - Global error handler
  *
  * This file does NOT start the server — that's done in index.js.
- * This separation makes it easy to import the app for testing.
+ * PDF Engine Version: Part 20 Spec with new_individual_pdfs table.
  */
 
 const express = require("express");
@@ -28,6 +28,7 @@ const entityEngagementRoutes = require("./routes/entityEngagement.routes");
 const changesToCompanyDetailsRoutes = require("./routes/changesToCompanyDetails.routes");
 const smsfRegistrationRoutes = require("./routes/smsfRegistration.routes");
 const companyRegistrationRoutes = require("./routes/companyRegistration.routes");
+const newIndividualEngagementRoutes = require("./routes/newIndividualEngagement.routes");
 
 // Create Express app
 const app = express();
@@ -56,8 +57,14 @@ app.use(
 // Parse incoming JSON request bodies (form data from Old App will arrive as JSON)
 app.use(express.json({ limit: "10mb" })); // 10mb limit to handle base64 signatures
 
+const path = require("path");
+
 // Parse URL-encoded bodies (for traditional form submissions)
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// Serve static uploaded files (PDFs, signatures, documents)
+app.use("/uploads", express.static(path.join(__dirname, "public/uploads")));
+app.use("/api/uploads", express.static(path.join(__dirname, "public/uploads")));
 
 // ============================
 // Routes
@@ -102,6 +109,9 @@ app.use("/api/smsf-registrations", smsfRegistrationRoutes);
 
 // Company Registration routes
 app.use("/api/company-registrations", companyRegistrationRoutes);
+
+// New Individual Engagement routes
+app.use("/api/new-individual-engagements", newIndividualEngagementRoutes);
 
 // ============================
 // Future Route Registrations
