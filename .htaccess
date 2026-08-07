@@ -1,0 +1,28 @@
+# ============================================
+# Financially Up - Backend API
+# LiteSpeed / Apache Configuration
+# ============================================
+
+# Increase maximum allowed request body size to 50MB
+# This allows file uploads (ID docs, signatures, visa evidence)
+# to pass through the reverse proxy to the Node.js app.
+LimitRequestBody 52428800
+
+# Increase timeout for large uploads (5 minutes)
+<IfModule mod_reqtimeout.c>
+    RequestReadTimeout header=120 body=300
+</IfModule>
+
+# Ensure proper CORS headers are passed through
+<IfModule mod_headers.c>
+    # Allow preflight OPTIONS requests
+    Header always set Access-Control-Allow-Origin "https://financiallyup.innotechcloud.online"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization"
+    Header always set Access-Control-Allow-Credentials "true"
+
+    # Handle preflight OPTIONS requests at server level
+    RewriteEngine On
+    RewriteCond %{REQUEST_METHOD} OPTIONS
+    RewriteRule ^(.*)$ $1 [R=200,L]
+</IfModule>
