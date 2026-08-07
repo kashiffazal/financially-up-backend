@@ -37,10 +37,9 @@ const app = express();
 // Middleware
 // ============================
 
-// Security headers (XSS protection, content-type sniffing prevention, etc.)
-app.use(helmet());
-
 // CORS — allow requests from the frontend (New App) and the Old App
+// IMPORTANT: CORS must be registered BEFORE helmet so preflight OPTIONS
+// requests get the Access-Control-Allow-Origin header without interference.
 const allowedOrigins = (process.env.CORS_ORIGINS || "http://localhost:3000")
   .split(",")
   .map((origin) => origin.trim());
@@ -51,6 +50,15 @@ app.use(
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true, // Allow cookies if needed in the future
+  }),
+);
+
+// Security headers (XSS protection, content-type sniffing prevention, etc.)
+// crossOriginResourcePolicy set to "cross-origin" so the API can serve
+// files (PDFs, images, uploads) to the frontend on a different domain.
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
   }),
 );
 
