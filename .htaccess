@@ -1,9 +1,0 @@
-# ============================================
-# Financially Up - Backend API
-# LiteSpeed / Apache Configuration
-# ============================================
-
-# Increase maximum allowed request body size to 50MB
-# This allows file uploads (ID docs, signatures, visa evidence)
-# to pass through the reverse proxy to the Node.js app.
-LimitRequestBody 52428800
