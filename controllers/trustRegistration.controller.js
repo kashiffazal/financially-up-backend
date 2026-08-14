@@ -8,7 +8,7 @@ const { TrustRegistration } = require("../models");
 const { successResponse, errorResponse } = require("../utils/apiResponse");
 const { Op } = require("sequelize");
 
-/** GET /api/trust-registrations — Fetch all with pagination, status filter, search */
+/** GET /api/trust-registrations - Fetch all with pagination, status filter, search */
 const getAll = async (req, res, next) => {
   try {
     const { page = 1, limit = 10, status, search } = req.query;
@@ -37,15 +37,19 @@ const getAll = async (req, res, next) => {
       order: [["createdAt", "DESC"]],
     });
 
-    return successResponse(res, "Trust registration records fetched successfully", {
-      records: rows,
-      pagination: {
-        total: count,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        totalPages: Math.ceil(count / parseInt(limit)),
+    return successResponse(
+      res,
+      "Trust registration records fetched successfully",
+      {
+        records: rows,
+        pagination: {
+          total: count,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          totalPages: Math.ceil(count / parseInt(limit)),
+        },
       },
-    });
+    );
   } catch (error) {
     next(error);
   }
@@ -68,7 +72,12 @@ const create = async (req, res, next) => {
     const formData = req.body;
     if (!formData.status) formData.status = "New Query";
     const record = await TrustRegistration.create(formData);
-    return successResponse(res, "Trust registration record created successfully", record, 201);
+    return successResponse(
+      res,
+      "Trust registration record created successfully",
+      record,
+      201,
+    );
   } catch (error) {
     next(error);
   }

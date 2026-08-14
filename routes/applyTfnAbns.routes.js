@@ -24,19 +24,19 @@ const {
   remove,
 } = require("../controllers/applyTfnAbns.controller");
 
-// GET /api/apply-tfn-abns — Fetch all with pagination & filters
+// GET /api/apply-tfn-abns - Fetch all with pagination & filters
 router.get("/", getAll);
 
-// GET /api/apply-tfn-abns/:id — Fetch single record by ID
+// GET /api/apply-tfn-abns/:id - Fetch single record by ID
 router.get("/:id", getById);
 
-// POST /api/apply-tfn-abns — Create new record (Old App calls this)
+// POST /api/apply-tfn-abns - Create new record (Old App calls this)
 router.post("/", create);
 
-// PUT /api/apply-tfn-abns/:id — Update existing record
+// PUT /api/apply-tfn-abns/:id - Update existing record
 router.put("/:id", update);
 
-// DELETE /api/apply-tfn-abns/:id — Delete a record
+// DELETE /api/apply-tfn-abns/:id - Delete a record
 router.delete("/:id", remove);
 
 module.exports = router;

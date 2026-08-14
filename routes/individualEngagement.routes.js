@@ -24,19 +24,19 @@ const {
   remove,
 } = require("../controllers/individualEngagement.controller");
 
-// GET /api/individual-engagement — Fetch all with pagination & filters
+// GET /api/individual-engagement - Fetch all with pagination & filters
 router.get("/", getAll);
 
-// GET /api/individual-engagement/:id — Fetch single record by ID
+// GET /api/individual-engagement/:id - Fetch single record by ID
 router.get("/:id", getById);
 
-// POST /api/individual-engagement — Create new record (Old App calls this)
+// POST /api/individual-engagement - Create new record (Old App calls this)
 router.post("/", create);
 
-// PUT /api/individual-engagement/:id — Update existing record
+// PUT /api/individual-engagement/:id - Update existing record
 router.put("/:id", update);
 
-// DELETE /api/individual-engagement/:id — Delete a record
+// DELETE /api/individual-engagement/:id - Delete a record
 router.delete("/:id", remove);
 
 module.exports = router;

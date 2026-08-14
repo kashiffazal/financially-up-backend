@@ -22,19 +22,14 @@ const { Op } = require("sequelize");
  * Fetch all individual engagements with pagination, status filtering, and search.
  *
  * Query Parameters:
- * - page (default: 1) — current page number
- * - limit (default: 10) — records per page
- * - status — filter by workflow status (e.g., "New Query", "Approved")
- * - search — search across FirstName, LastName, email, PhoneNumber
+ * - page (default: 1) - current page number
+ * - limit (default: 10) - records per page
+ * - status - filter by workflow status (e.g., "New Query", "Approved")
+ * - search - search across FirstName, LastName, email, PhoneNumber
  */
 const getAll = async (req, res, next) => {
   try {
-    const {
-      page = 1,
-      limit = 10,
-      status,
-      search,
-    } = req.query;
+    const { page = 1, limit = 10, status, search } = req.query;
 
     // Build dynamic WHERE clause based on query parameters
     const whereClause = {};
@@ -94,7 +89,11 @@ const getById = async (req, res, next) => {
       return errorResponse(res, "Individual engagement not found", 404);
     }
 
-    return successResponse(res, "Individual engagement fetched successfully", engagement);
+    return successResponse(
+      res,
+      "Individual engagement fetched successfully",
+      engagement,
+    );
   } catch (error) {
     next(error);
   }
@@ -115,14 +114,14 @@ const create = async (req, res, next) => {
       formData.status = "New Query";
     }
 
-    // Create the record — Sequelize will only save fields that match the model
+    // Create the record - Sequelize will only save fields that match the model
     const engagement = await IndividualEngagement.create(formData);
 
     return successResponse(
       res,
       "Individual engagement created successfully",
       engagement,
-      201 // 201 Created
+      201, // 201 Created
     );
   } catch (error) {
     next(error);
@@ -151,7 +150,11 @@ const update = async (req, res, next) => {
     // Update the record with new data
     await engagement.update(updateData);
 
-    return successResponse(res, "Individual engagement updated successfully", engagement);
+    return successResponse(
+      res,
+      "Individual engagement updated successfully",
+      engagement,
+    );
   } catch (error) {
     next(error);
   }

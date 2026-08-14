@@ -429,13 +429,13 @@ const Medicare = sequelize.define("medicares", {
   // Attachments (JSON arrays of file URLs)
   // ============================
 
-  /** Evidence of visa endorsed — array of file URLs */
+  /** Evidence of visa endorsed - array of file URLs */
   evidenceoOfVisaEndorsed: {
     type: DataTypes.JSON,
     allowNull: true,
   },
 
-  /** Medical insurance details — can be array */
+  /** Medical insurance details - can be array */
   medicalInsurance: {
     type: DataTypes.JSON,
     allowNull: true,
@@ -453,7 +453,7 @@ const Medicare = sequelize.define("medicares", {
     allowNull: true,
   },
 
-  /** Other documents — array of file URLs */
+  /** Other documents - array of file URLs */
   otherDocuments: {
     type: DataTypes.JSON,
     allowNull: true,
@@ -479,13 +479,13 @@ const Medicare = sequelize.define("medicares", {
     allowNull: true,
   },
 
-  /** Client signature — Base64 encoded image or URL */
+  /** Client signature - Base64 encoded image or URL */
   signature: {
     type: DataTypes.TEXT,
     allowNull: true,
   },
 
-  /** Workflow status — managed by admin panel */
+  /** Workflow status - managed by admin panel */
   status: {
     type: DataTypes.TEXT,
     allowNull: false,

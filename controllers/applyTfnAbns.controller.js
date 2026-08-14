@@ -22,19 +22,14 @@ const { Op } = require("sequelize");
  * Fetch all apply TFN & ABN records with pagination, status filtering, and search.
  *
  * Query Parameters:
- * - page (default: 1) — current page number
- * - limit (default: 10) — records per page
- * - status — filter by workflow status (e.g., "New Query", "Approved")
- * - search — search across firstName, lastName, email, phoneNumber
+ * - page (default: 1) - current page number
+ * - limit (default: 10) - records per page
+ * - status - filter by workflow status (e.g., "New Query", "Approved")
+ * - search - search across firstName, lastName, email, phoneNumber
  */
 const getAll = async (req, res, next) => {
   try {
-    const {
-      page = 1,
-      limit = 10,
-      status,
-      search,
-    } = req.query;
+    const { page = 1, limit = 10, status, search } = req.query;
 
     // Build dynamic WHERE clause based on query parameters
     const whereClause = {};
@@ -69,15 +64,19 @@ const getAll = async (req, res, next) => {
       order: [["createdAt", "DESC"]], // Newest first
     });
 
-    return successResponse(res, "Apply TFN & ABN records fetched successfully", {
-      records: rows,
-      pagination: {
-        total: count,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        totalPages: Math.ceil(count / parseInt(limit)),
+    return successResponse(
+      res,
+      "Apply TFN & ABN records fetched successfully",
+      {
+        records: rows,
+        pagination: {
+          total: count,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          totalPages: Math.ceil(count / parseInt(limit)),
+        },
       },
-    });
+    );
   } catch (error) {
     next(error);
   }
@@ -97,7 +96,11 @@ const getById = async (req, res, next) => {
       return errorResponse(res, "Apply TFN & ABN record not found", 404);
     }
 
-    return successResponse(res, "Apply TFN & ABN record fetched successfully", record);
+    return successResponse(
+      res,
+      "Apply TFN & ABN record fetched successfully",
+      record,
+    );
   } catch (error) {
     next(error);
   }
@@ -118,14 +121,14 @@ const create = async (req, res, next) => {
       formData.status = "New Query";
     }
 
-    // Create the record — Sequelize will only save fields that match the model
+    // Create the record - Sequelize will only save fields that match the model
     const record = await ApplyTfnAbns.create(formData);
 
     return successResponse(
       res,
       "Apply TFN & ABN record created successfully",
       record,
-      201 // 201 Created
+      201, // 201 Created
     );
   } catch (error) {
     next(error);
@@ -154,7 +157,11 @@ const update = async (req, res, next) => {
     // Update the record with new data
     await record.update(updateData);
 
-    return successResponse(res, "Apply TFN & ABN record updated successfully", record);
+    return successResponse(
+      res,
+      "Apply TFN & ABN record updated successfully",
+      record,
+    );
   } catch (error) {
     next(error);
   }

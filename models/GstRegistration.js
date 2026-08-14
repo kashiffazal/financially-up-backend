@@ -210,13 +210,13 @@ const GstRegistration = sequelize.define("gst_registrations", {
     allowNull: true,
   },
 
-  /** Client signature — Base64 encoded image or URL */
+  /** Client signature - Base64 encoded image or URL */
   signature: {
     type: DataTypes.TEXT,
     allowNull: true,
   },
 
-  /** Workflow status — managed by admin panel */
+  /** Workflow status - managed by admin panel */
   status: {
     type: DataTypes.TEXT,
     allowNull: false,

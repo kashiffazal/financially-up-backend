@@ -67,7 +67,7 @@ const startServer = async () => {
     // Sync all models with the database
     // alter: true will update existing tables to match the model (add new columns, etc.)
     // In production, you would use migrations instead of sync
-    await sequelize.sync({ alter: true });
+    await sequelize.sync();
     console.log("✅ Database tables synced successfully.");
 
     // Start the Express server

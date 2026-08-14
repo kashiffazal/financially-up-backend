@@ -18,6 +18,7 @@ const {
   NewIndividualConsent,
   NewIndividualSignature,
   NewIndividualAuditLog,
+  NewIndividualAdminReview,
 } = require("../models");
 
 const { saveBase64Signature } = require("../services/storage.service");
@@ -209,13 +210,65 @@ async function createEngagement(req, res) {
       { transaction }
     );
 
-    // 6. Consents
-    const consentTypes = ["ScheduleTerms", "PrivacyNotice", "AtoAuthority", "BiometricConsent"];
-    for (const cType of consentTypes) {
-      await NewIndividualConsent.create(
-        { engagementId: engagement.id, consentType: cType, accepted: true },
-        { transaction }
-      );
+    // 6. Consents with Audit Tracking (documentType, version, openedAt, acceptedAt)
+    const consentEntries = [
+      {
+        consentType: "ScheduleTerms",
+        accepted: body.consentScheduleTerms === true || body.consentScheduleTerms === "true" || body.consentScheduleTerms === 1,
+        documentType: body.termsDocumentType || "TERMS",
+        version: body.termsVersion || "2.1",
+        openedAt: body.termsOpenedAt ? new Date(body.termsOpenedAt) : null,
+        acceptedAt: body.termsAcceptedAt ? new Date(body.termsAcceptedAt) : new Date(),
+      },
+      {
+        consentType: "PrivacyNotice",
+        accepted: body.consentPrivacy === true || body.consentPrivacy === "true" || body.consentPrivacy === 1,
+        documentType: body.privacyDocumentType || "PRIVACY",
+        version: body.privacyVersion || "2.1",
+        openedAt: body.privacyOpenedAt ? new Date(body.privacyOpenedAt) : null,
+        acceptedAt: body.privacyAcceptedAt ? new Date(body.privacyAcceptedAt) : new Date(),
+      },
+      {
+        consentType: "AtoAuthority",
+        accepted: body.consentAtoAuthority === true || body.consentAtoAuthority === "true" || body.consentAtoAuthority === 1,
+        documentType: "ATO_AUTHORITY",
+        version: "1.0",
+        openedAt: null,
+        acceptedAt: new Date(),
+      },
+      {
+        consentType: "CloudProcessing",
+        accepted: body.consentCloudOverseas === "Yes",
+        documentType: "CLOUD_PROCESSING",
+        version: "1.0",
+        openedAt: null,
+        acceptedAt: new Date(),
+      },
+      {
+        consentType: "BiometricConsent",
+        accepted: body.consentBiometric === true || body.consentBiometric === "true" || body.consentBiometric === 1,
+        documentType: "BIOMETRIC",
+        version: "1.0",
+        openedAt: null,
+        acceptedAt: new Date(),
+      },
+    ];
+
+    for (const entry of consentEntries) {
+      if (entry.accepted) {
+        await NewIndividualConsent.create(
+          {
+            engagementId: engagement.id,
+            consentType: entry.consentType,
+            documentType: entry.documentType,
+            version: entry.version,
+            openedAt: entry.openedAt,
+            accepted: true,
+            acceptedAt: entry.acceptedAt,
+          },
+          { transaction }
+        );
+      }
     }
 
     // 6b. Process Multer Uploaded Documents (Multer)
@@ -281,7 +334,7 @@ async function createEngagement(req, res) {
     // 8. Async PDF Generation & Email Dispatch
     try {
       const fullData = await NewIndividualEngagement.findByPk(engagement.id, {
-        include: ["client", "services", "identity", "documents", "consents", "signatures", "auditLogs"],
+        include: ["client", "services", "identity", "documents", "consents", "signatures", "auditLogs", "adminReview"],
       });
       
       const clientPdfPath = await generateClientEngagementPDF(fullData);
@@ -321,7 +374,7 @@ async function createEngagement(req, res) {
 async function getEngagements(req, res) {
   try {
     const engagements = await NewIndividualEngagement.findAll({
-      include: ["client", "services", "identity", "documents", "signatures"],
+      include: ["client", "services", "identity", "documents", "signatures", "adminReview"],
       order: [["createdAt", "DESC"]],
     });
     return res.status(200).json({
@@ -341,7 +394,7 @@ async function getEngagementById(req, res) {
   try {
     const { id } = req.params;
     const engagement = await NewIndividualEngagement.findByPk(id, {
-      include: ["client", "services", "identity", "documents", "consents", "signatures", "auditLogs"],
+      include: ["client", "services", "identity", "documents", "consents", "signatures", "auditLogs", "adminReview"],
     });
 
     if (!engagement) {
@@ -375,8 +428,15 @@ async function submitAdminDecision(req, res) {
     const staffName = body.staffMemberName || body.taxAgentName || "Financially Up Tax Agent";
     const decision = body.decision || body.status || "Accepted";
     const riskLevel = body.riskLevel || engagement.riskLevel || "Low";
-    const reviewNotes = body.reviewNotes || body.riskNotes || body.notes || "Phase 2 review completed.";
+    const reviewNotes = typeof body.reviewNotes === "string" ? body.reviewNotes : (body.notes || "");
     const sigType = body.staffSignatureType || "draw";
+    const userRole = body.userRole || "Accountant";
+    const riskRationale = body.riskRationale || null;
+    
+    let checklistItems = body.admChecklist;
+    if (typeof checklistItems === "string") {
+      try { checklistItems = JSON.parse(checklistItems); } catch (e) { checklistItems = [checklistItems]; }
+    }
 
     // 1. Process Staff Signature
     let staffSigPath = null;
@@ -414,7 +474,7 @@ async function submitAdminDecision(req, res) {
 
     // 3. Fetch Full Data & Regenerate PDFs
     const fullData = await NewIndividualEngagement.findByPk(engagement.id, {
-      include: ["client", "services", "identity", "documents", "consents", "signatures", "auditLogs"],
+      include: ["client", "services", "identity", "documents", "consents", "signatures", "auditLogs", "adminReview"],
     });
 
     let adminPdfPath = null;
@@ -447,10 +507,36 @@ async function submitAdminDecision(req, res) {
       "Accepted": "Accepted",
       "Conditional Accept": "Conditional Accept",
       "Request Information": "Request Information",
+      "Enhanced Monitoring": "Enhanced Monitoring",
+      "Escalate": "Escalate",
       "Declined": "Declined",
       "Decline": "Declined",
     };
-    const mappedStatus = statusEnumMap[decision] || "Accepted";
+    const mappedStatus = statusEnumMap[decision] || decision || "Accepted";
+
+    // Upsert into new_individual_admin_reviews table
+    const [adminReviewRecord] = await NewIndividualAdminReview.upsert({
+      engagementId: engagement.id,
+      userRole,
+      reviewerName: staffName,
+      decision,
+      riskLevel,
+      riskRationale,
+      checklistItems: checklistItems || [],
+      amlDesignatedServiceInvolved: body.amlDesignatedServiceInvolved || "No",
+      amlBeneficialOwnershipVerified: body.amlBeneficialOwnershipVerified || "Yes",
+      amlSourceOfFundsRecorded: body.amlSourceOfFundsRecorded || "N/A",
+      amlEscalationRequired: body.amlEscalationRequired || (decision === "Escalate" ? "Yes" : "No"),
+      sanctionsOverseasActivityCheck: body.sanctionsOverseasActivityCheck || "Pass",
+      sanctionsHighRiskJurisdictionCheck: body.sanctionsHighRiskJurisdictionCheck || "Pass",
+      sanctionsNameMatchCheck: body.sanctionsNameMatchCheck || "Clear - No Match",
+      reviewNotes,
+      signatureMethod: sigType,
+      signatureFilePath: staffSigPath,
+      signatureTypedName: body.staffTypedSignature || null,
+      signatureDrawnData: sigType === "draw" ? body.staffDrawnSignature : null,
+      ipAddress: req.ip || "127.0.0.1",
+    });
 
     await engagement.update({
       status: mappedStatus,

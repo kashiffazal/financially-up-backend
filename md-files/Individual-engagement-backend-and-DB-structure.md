@@ -1,4 +1,4 @@
-# 🛠️ Backend Implementation Plan — New Individual Client Engagement System
+# 🛠️ Backend Implementation Plan - New Individual Client Engagement System
 
 > [!IMPORTANT]
 > **Strict Code Isolation Rule:**  
@@ -46,14 +46,14 @@ erDiagram
    - `birthCity` (VARCHAR 100)
    - `occupation` (VARCHAR 150)
    - `employmentStatus` (VARCHAR 100)
-   - `maskedTfn` (VARCHAR 20) — Encrypted / Masked (e.g. `*** *** 789`)
+   - `maskedTfn` (VARCHAR 20) - Encrypted / Masked (e.g. `*** *** 789`)
 
 2. **`new_individual_engagements`** (Master Record)
    - `id` (BIGINT PK AUTO_INCREMENT)
    - `clientId` (FK -> `new_individual_clients.id`)
    - `referenceNumber` (VARCHAR 50 UNIQUE) e.g. `NENG-2026-0091`
    - `status` (ENUM: `Pending Review`, `Accepted`, `Conditional Accept`, `Request Information`, `Declined`)
-   - `entityService` (VARCHAR 10) — `No`, `Yes`, `Unsure`
+   - `entityService` (VARCHAR 10) - `No`, `Yes`, `Unsure`
    - `isAustralianCitizen` (BOOLEAN)
    - `taxResidency` (VARCHAR 50)
    - `hasPreviousName` / `previousNames`
@@ -76,22 +76,22 @@ erDiagram
 4. **`new_individual_identities`**
    - `id` (BIGINT PK)
    - `engagementId` (FK -> `new_individual_engagements.id`)
-   - `identityMethod` (VARCHAR 50) — `Upload ID`, `Electronic Verification`, `Live Video`, `In Person`, `No Photo ID`
+   - `identityMethod` (VARCHAR 50) - `Upload ID`, `Electronic Verification`, `Live Video`, `In Person`, `No Photo ID`
    - `primaryIdPath` / `supportingIdPath` / `selfiePath`
    - `noPhotoIdReason` (TEXT)
    - `biometricConsent` (BOOLEAN)
-   - `dvsStatus` (VARCHAR 50) — `Pass`, `Pending`, `Manual Review`
+   - `dvsStatus` (VARCHAR 50) - `Pass`, `Pending`, `Manual Review`
 
 5. **`new_individual_documents`**
    - `id` (BIGINT PK)
    - `engagementId` (FK -> `new_individual_engagements.id`)
-   - `documentCategory` (VARCHAR 50) — `Visa`, `ATO Notice`, `Authority Document`, `ID Document`
+   - `documentCategory` (VARCHAR 50) - `Visa`, `ATO Notice`, `Authority Document`, `ID Document`
    - `fileName` / `filePath` / `fileSize` / `mimeType`
 
 6. **`new_individual_consents`**
    - `id` (BIGINT PK)
    - `engagementId` (FK -> `new_individual_engagements.id`)
-   - `consentType` (VARCHAR 100) — `ScheduleTerms`, `PrivacyNotice`, `AtoAuthority`, `AbrAuthority`, `CloudProcessing`
+   - `consentType` (VARCHAR 100) - `ScheduleTerms`, `PrivacyNotice`, `AtoAuthority`, `AbrAuthority`, `CloudProcessing`
    - `accepted` (BOOLEAN)
    - `acceptedAt` (DATETIME)
 
@@ -101,10 +101,10 @@ erDiagram
    - `signerType` (ENUM: `Client`, `TaxAgent`)
    - `signerFullName` (VARCHAR 150)
    - `signatureMethod` (ENUM: `draw`, `type`, `upload`)
-   - `signatureFilePath` (TEXT) — Stored PNG file path
+   - `signatureFilePath` (TEXT) - Stored PNG file path
    - `ipAddress` (VARCHAR 45)
    - `userAgent` (TEXT)
-   - `bindingConfirmed` (BOOLEAN) — ETA 1999 consent
+   - `bindingConfirmed` (BOOLEAN) - ETA 1999 consent
 
 8. **`new_individual_audit_logs`**
    - `id` (BIGINT PK)
@@ -127,19 +127,21 @@ erDiagram
 ## 📄 PDF Generation Engine (`financially-up-backend/services/individualPdf.service.js`)
 
 Uses **Puppeteer**:
+
 - `generateClientEngagementPDF(engagementId)`: Produces a 4-page branded PDF containing:
   - Header with Financially Up logo & company contact details (`Level 5, 100 Walker St, North Sydney NSW 2060`, `1300 328 316`).
   - Section 1: Client Information & Tax Profile.
   - Section 2: Engagement Schedule (Scope of Work & Fee Schedule).
   - Section 3: Statutory Legal Consents & ATO Authority Declarations.
   - Section 4: Electronic Signature Stamp & Audit Details.
-- *Security Rule:* TFNs are masked (`*** *** 789`) and bank account numbers are masked (`****5678`). Internal notes & risk ratings are excluded from client PDF.
+- _Security Rule:_ TFNs are masked (`*** *** 789`) and bank account numbers are masked (`****5678`). Internal notes & risk ratings are excluded from client PDF.
 
 ---
 
 ## 📧 Email Notification Workflow (`financially-up-backend/services/individualEmail.service.js`)
 
 Uses **Nodemailer** with HTML email templates:
+
 1. **Client Submission Receipt:**
    - Subject: `Engagement Application Received - Financially Up (Ref: NENG-2026-XXXX)`
    - Attachment: `Client_Engagement_Notice.pdf`
@@ -166,29 +168,45 @@ Uses **Nodemailer** with HTML email templates:
 ### `financially-up-backend`
 
 #### [NEW] [`models/NewIndividualClient.js`](file:///d:/xampp/htdocs/myProjects/nextjs/financially-up/financially-up-backend/models/NewIndividualClient.js)
+
 #### [NEW] [`models/NewIndividualEngagement.js`](file:///d:/xampp/htdocs/myProjects/nextjs/financially-up/financially-up-backend/models/NewIndividualEngagement.js)
+
 #### [NEW] [`models/NewIndividualService.js`](file:///d:/xampp/htdocs/myProjects/nextjs/financially-up/financially-up-backend/models/NewIndividualService.js)
+
 #### [NEW] [`models/NewIndividualIdentity.js`](file:///d:/xampp/htdocs/myProjects/nextjs/financially-up/financially-up-backend/models/NewIndividualIdentity.js)
+
 #### [NEW] [`models/NewIndividualDocument.js`](file:///d:/xampp/htdocs/myProjects/nextjs/financially-up/financially-up-backend/models/NewIndividualDocument.js)
+
 #### [NEW] [`models/NewIndividualConsent.js`](file:///d:/xampp/htdocs/myProjects/nextjs/financially-up/financially-up-backend/models/NewIndividualConsent.js)
+
 #### [NEW] [`models/NewIndividualSignature.js`](file:///d:/xampp/htdocs/myProjects/nextjs/financially-up/financially-up-backend/models/NewIndividualSignature.js)
+
 #### [NEW] [`models/NewIndividualAuditLog.js`](file:///d:/xampp/htdocs/myProjects/nextjs/financially-up/financially-up-backend/models/NewIndividualAuditLog.js)
+
 #### [NEW] [`middleware/upload.js`](file:///d:/xampp/htdocs/myProjects/nextjs/financially-up/financially-up-backend/middleware/upload.js)
+
 #### [NEW] [`services/storage.service.js`](file:///d:/xampp/htdocs/myProjects/nextjs/financially-up/financially-up-backend/services/storage.service.js)
+
 #### [NEW] [`services/individualPdf.service.js`](file:///d:/xampp/htdocs/myProjects/nextjs/financially-up/financially-up-backend/services/individualPdf.service.js)
+
 #### [NEW] [`services/individualEmail.service.js`](file:///d:/xampp/htdocs/myProjects/nextjs/financially-up/financially-up-backend/services/individualEmail.service.js)
+
 #### [NEW] [`controllers/newIndividualEngagement.controller.js`](file:///d:/xampp/htdocs/myProjects/nextjs/financially-up/financially-up-backend/controllers/newIndividualEngagement.controller.js)
+
 #### [NEW] [`routes/newIndividualEngagement.routes.js`](file:///d:/xampp/htdocs/myProjects/nextjs/financially-up/financially-up-backend/routes/newIndividualEngagement.routes.js)
-#### [MODIFY] [`app.js`](file:///d:/xampp/htdocs/myProjects/nextjs/financially-up/financially-up-backend/app.js) — Register `/api/new-individual-engagements` route without touching existing routes.
+
+#### [MODIFY] [`app.js`](file:///d:/xampp/htdocs/myProjects/nextjs/financially-up/financially-up-backend/app.js) - Register `/api/new-individual-engagements` route without touching existing routes.
 
 ---
 
 ### `financially-up-frontend`
 
 #### [NEW] [`app/admin/individual-engagement-new/page.js`](file:///d:/xampp/htdocs/myProjects/nextjs/financially-up/financially-up-frontend/app/admin/individual-engagement-new/page.js)
+
 - Dedicated Admin page for the New Individual Engagement Form.
 
 #### [NEW] [`services/newIndividualEngagement.service.js`](file:///d:/xampp/htdocs/myProjects/nextjs/financially-up/financially-up-frontend/services/newIndividualEngagement.service.js)
+
 - Dedicated frontend client service connecting `/resources/engagement-forms/individual-engagement-form` and `/admin/individual-engagement-new` to `/api/new-individual-engagements`.
 
 ---
@@ -196,11 +214,13 @@ Uses **Nodemailer** with HTML email templates:
 ## 🧪 Verification Plan
 
 ### Automated / API Verification
+
 - Submit form to `POST /api/new-individual-engagements`.
 - Verify database tables `new_individual_*` populated.
 - Verify files stored in `/public/uploads/documents/` and signatures in `/public/uploads/signatures/`.
 - Verify legacy production code, tables, and `/admin/individual-engagement` page remain untouched.
 
 ### Manual Verification
+
 - Test client submission at `/resources/engagement-forms/individual-engagement-form`.
 - Test Phase 2 Admin review and countersignature execution at `/admin/individual-engagement-new`.

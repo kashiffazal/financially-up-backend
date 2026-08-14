@@ -177,7 +177,7 @@ const EntityEngagement = sequelize.define("entity_engagements", {
     allowNull: true,
   },
 
-  /** Proof of ID attachment — URL or JSON array of URLs */
+  /** Proof of ID attachment - URL or JSON array of URLs */
   proofOfID: {
     type: DataTypes.JSON,
     allowNull: true,
@@ -225,13 +225,13 @@ const EntityEngagement = sequelize.define("entity_engagements", {
     allowNull: true,
   },
 
-  /** Client signature — Base64 encoded image or URL */
+  /** Client signature - Base64 encoded image or URL */
   signature: {
     type: DataTypes.TEXT,
     allowNull: true,
   },
 
-  /** Workflow status — managed by admin panel */
+  /** Workflow status - managed by admin panel */
   status: {
     type: DataTypes.TEXT,
     allowNull: false,

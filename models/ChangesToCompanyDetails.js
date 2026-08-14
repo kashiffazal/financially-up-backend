@@ -325,7 +325,7 @@ const ChangesToCompanyDetails = sequelize.define("changes_to_company_details", {
     allowNull: true,
   },
 
-  /** Workflow status — managed by admin panel */
+  /** Workflow status - managed by admin panel */
   status: {
     type: DataTypes.TEXT,
     allowNull: false,

@@ -24,19 +24,19 @@ const {
   remove,
 } = require("../controllers/gstRegistration.controller");
 
-// GET /api/gst-registrations — Fetch all with pagination & filters
+// GET /api/gst-registrations - Fetch all with pagination & filters
 router.get("/", getAll);
 
-// GET /api/gst-registrations/:id — Fetch single record by ID
+// GET /api/gst-registrations/:id - Fetch single record by ID
 router.get("/:id", getById);
 
-// POST /api/gst-registrations — Create new record (Old App calls this)
+// POST /api/gst-registrations - Create new record (Old App calls this)
 router.post("/", create);
 
-// PUT /api/gst-registrations/:id — Update existing record
+// PUT /api/gst-registrations/:id - Update existing record
 router.put("/:id", update);
 
-// DELETE /api/gst-registrations/:id — Delete a record
+// DELETE /api/gst-registrations/:id - Delete a record
 router.delete("/:id", remove);
 
 module.exports = router;

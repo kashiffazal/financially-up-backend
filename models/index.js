@@ -29,6 +29,9 @@ const NewIndividualConsent = require("./NewIndividualConsent");
 const NewIndividualSignature = require("./NewIndividualSignature");
 const NewIndividualAuditLog = require("./NewIndividualAuditLog");
 const NewIndividualPdf = require("./NewIndividualPdf");
+const NewIndividualLodgment = require("./NewIndividualLodgment");
+const NewIndividualLodgmentDeclaration = require("./NewIndividualLodgmentDeclaration");
+const NewIndividualAdminReview = require("./NewIndividualAdminReview");
 
 // ============================
 // Define New Model Associations
@@ -57,6 +60,15 @@ NewIndividualAuditLog.belongsTo(NewIndividualEngagement, { foreignKey: "engageme
 NewIndividualEngagement.hasMany(NewIndividualPdf, { foreignKey: "engagementId", as: "pdfs" });
 NewIndividualPdf.belongsTo(NewIndividualEngagement, { foreignKey: "engagementId" });
 
+NewIndividualEngagement.hasMany(NewIndividualLodgment, { foreignKey: "engagementId", as: "lodgments" });
+NewIndividualLodgment.belongsTo(NewIndividualEngagement, { foreignKey: "engagementId" });
+
+NewIndividualLodgment.hasOne(NewIndividualLodgmentDeclaration, { foreignKey: "lodgmentId", as: "declaration" });
+NewIndividualLodgmentDeclaration.belongsTo(NewIndividualLodgment, { foreignKey: "lodgmentId" });
+
+NewIndividualEngagement.hasOne(NewIndividualAdminReview, { foreignKey: "engagementId", as: "adminReview" });
+NewIndividualAdminReview.belongsTo(NewIndividualEngagement, { foreignKey: "engagementId" });
+
 // Export all models and the sequelize instance
 module.exports = {
   sequelize,
@@ -81,4 +93,7 @@ module.exports = {
   NewIndividualSignature,
   NewIndividualAuditLog,
   NewIndividualPdf,
+  NewIndividualLodgment,
+  NewIndividualLodgmentDeclaration,
+  NewIndividualAdminReview,
 };

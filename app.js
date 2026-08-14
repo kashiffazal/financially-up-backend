@@ -8,7 +8,7 @@
  * - Route registration
  * - Global error handler
  *
- * This file does NOT start the server — that's done in index.js.
+ * This file does NOT start the server - that's done in index.js.
  * PDF Engine Version: Part 20 Spec with new_individual_pdfs table.
  */
 
@@ -37,7 +37,7 @@ const app = express();
 // Middleware
 // ============================
 
-// CORS — allow requests from the frontend (New App) and the Old App
+// CORS - allow requests from the frontend (New App) and the Old App
 // IMPORTANT: CORS must be registered BEFORE helmet so preflight OPTIONS
 // requests get the Access-Control-Allow-Origin header without interference.
 const allowedOrigins = (process.env.CORS_ORIGINS || "http://localhost:3000")
@@ -46,10 +46,15 @@ const allowedOrigins = (process.env.CORS_ORIGINS || "http://localhost:3000")
 
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin: function (origin, callback) {
+      if (!origin || origin.includes("localhost") || origin.includes("127.0.0.1") || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(null, true);
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true, // Allow cookies if needed in the future
+    credentials: true,
   }),
 );
 
@@ -78,7 +83,7 @@ app.use("/api/uploads", express.static(path.join(__dirname, "public/uploads")));
 // Routes
 // ============================
 
-// Health check endpoint — useful for monitoring and deployment checks
+// Health check endpoint - useful for monitoring and deployment checks
 app.get("/api/health", (req, res) => {
   res.json({
     success: true,

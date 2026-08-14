@@ -6,7 +6,7 @@
  * Each row represents one form submission from a client.
  *
  * This form handles multiple entity types (Individual TFN, Sole Trader ABN,
- * Company ABN, Trust ABN, Partnership ABN) — each with its own set of fields.
+ * Company ABN, Trust ABN, Partnership ABN) - each with its own set of fields.
  *
  * Field names are kept identical to the old app's form field names
  * so the POST body from the old app can be saved directly without transformation.
@@ -29,7 +29,7 @@ const ApplyTfnAbns = sequelize.define("apply_tfn_abns", {
   // Common / Individual TFN Fields
   // ============================
 
-  /** Which form types were selected — can be a JSON array or comma-separated string */
+  /** Which form types were selected - can be a JSON array or comma-separated string */
   applyTFN_ABN: {
     type: DataTypes.TEXT, // Can hold "[\"TFN\", \"ABN\"]" or a single string
     allowNull: true,
@@ -89,7 +89,7 @@ const ApplyTfnAbns = sequelize.define("apply_tfn_abns", {
     allowNull: true,
   },
 
-  /** Proof of identity documents — array of file URLs */
+  /** Proof of identity documents - array of file URLs */
   proofOfID: {
     type: DataTypes.JSON,
     allowNull: true,
@@ -127,25 +127,25 @@ const ApplyTfnAbns = sequelize.define("apply_tfn_abns", {
     allowNull: true,
   },
 
-  /** Sole trader postal address — house number */
+  /** Sole trader postal address - house number */
   housenumber_Sole_PostalCheckbox: {
     type: DataTypes.TEXT,
     allowNull: true,
   },
 
-  /** Sole trader postal address — street */
+  /** Sole trader postal address - street */
   street_Sole_PostalCheckbox: {
     type: DataTypes.TEXT,
     allowNull: true,
   },
 
-  /** Sole trader business address — house number */
+  /** Sole trader business address - house number */
   housenumber_Sole_BusinessCheckbox: {
     type: DataTypes.TEXT,
     allowNull: true,
   },
 
-  /** Sole trader business address — street */
+  /** Sole trader business address - street */
   street_Sole_BusinessCheckbox: {
     type: DataTypes.TEXT,
     allowNull: true,
@@ -229,7 +229,7 @@ const ApplyTfnAbns = sequelize.define("apply_tfn_abns", {
     allowNull: true,
   },
 
-  /** Sole trader proof of identity — array of file URLs */
+  /** Sole trader proof of identity - array of file URLs */
   proofOfID_Sole: {
     type: DataTypes.JSON,
     allowNull: true,
@@ -299,25 +299,25 @@ const ApplyTfnAbns = sequelize.define("apply_tfn_abns", {
     allowNull: true,
   },
 
-  /** Company ABN postal address — house number */
+  /** Company ABN postal address - house number */
   housenumber_CompanyABN_PostalCheckbox: {
     type: DataTypes.TEXT,
     allowNull: true,
   },
 
-  /** Company ABN postal address — street */
+  /** Company ABN postal address - street */
   street_CompanyABN_PostalCheckbox: {
     type: DataTypes.TEXT,
     allowNull: true,
   },
 
-  /** Company ABN business address — house number */
+  /** Company ABN business address - house number */
   housenumber_CompanyABN_BusinessCheckbox: {
     type: DataTypes.TEXT,
     allowNull: true,
   },
 
-  /** Company ABN business address — street */
+  /** Company ABN business address - street */
   street_CompanyABN_BusinessCheckbox: {
     type: DataTypes.TEXT,
     allowNull: true,
@@ -407,7 +407,7 @@ const ApplyTfnAbns = sequelize.define("apply_tfn_abns", {
     allowNull: true,
   },
 
-  /** Company ABN proof of identity — array of file URLs */
+  /** Company ABN proof of identity - array of file URLs */
   proofOfID_CompanyABN: {
     type: DataTypes.JSON,
     allowNull: true,
@@ -543,7 +543,7 @@ const ApplyTfnAbns = sequelize.define("apply_tfn_abns", {
     allowNull: true,
   },
 
-  /** Trust ABN proof of identity — array of file URLs */
+  /** Trust ABN proof of identity - array of file URLs */
   proofOfID_TrustABN: {
     type: DataTypes.JSON,
     allowNull: true,
@@ -565,25 +565,25 @@ const ApplyTfnAbns = sequelize.define("apply_tfn_abns", {
     allowNull: true,
   },
 
-  /** Partnership ABN postal address — house number */
+  /** Partnership ABN postal address - house number */
   housenumber_PartnershipABN_PostalCheckbox: {
     type: DataTypes.TEXT,
     allowNull: true,
   },
 
-  /** Partnership ABN postal address — street */
+  /** Partnership ABN postal address - street */
   street_PartnershipABN_PostalCheckbox: {
     type: DataTypes.TEXT,
     allowNull: true,
   },
 
-  /** Partnership ABN business address — house number */
+  /** Partnership ABN business address - house number */
   housenumber_PartnershipABN_BusinessCheckbox: {
     type: DataTypes.TEXT,
     allowNull: true,
   },
 
-  /** Partnership ABN business address — street */
+  /** Partnership ABN business address - street */
   street_PartnershipABN_BusinessCheckbox: {
     type: DataTypes.TEXT,
     allowNull: true,
@@ -667,7 +667,7 @@ const ApplyTfnAbns = sequelize.define("apply_tfn_abns", {
     allowNull: true,
   },
 
-  /** Partnership ABN proof of identity — array of file URLs */
+  /** Partnership ABN proof of identity - array of file URLs */
   proofOfID_PartnershipABN: {
     type: DataTypes.JSON,
     allowNull: true,
@@ -735,7 +735,7 @@ const ApplyTfnAbns = sequelize.define("apply_tfn_abns", {
     allowNull: true,
   },
 
-  /** Client signature — Base64 encoded image or URL */
+  /** Client signature - Base64 encoded image or URL */
   signature: {
     type: DataTypes.TEXT,
     allowNull: true,
@@ -746,7 +746,7 @@ const ApplyTfnAbns = sequelize.define("apply_tfn_abns", {
     allowNull: true,
   },
 
-  /** Workflow status — managed by admin panel */
+  /** Workflow status - managed by admin panel */
   status: {
     type: DataTypes.TEXT,
     allowNull: false,
@@ -762,7 +762,6 @@ const ApplyTfnAbns = sequelize.define("apply_tfn_abns", {
     type: DataTypes.TEXT, // Notes added by admin when approving/changing status
     allowNull: true,
   },
-
 });
 
 module.exports = ApplyTfnAbns;

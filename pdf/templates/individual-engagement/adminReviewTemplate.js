@@ -1,5 +1,5 @@
 /**
- * Admin Review PDF Template — Individual Engagement Form
+ * Admin Review PDF Template - Individual Engagement Form
  * ======================================================
  * Renders the comprehensive internal Office Review Package for Tax Agents & Staff.
  * Styled in Financially Up brand primary (#008043) & soft light (#eaf7f0) theme.
@@ -16,7 +16,9 @@ function getLogoBase64Uri() {
       return `data:image/png;base64,${buffer.toString("base64")}`;
     }
   } catch (e) {}
-  return process.env.COMPANY_LOGO_URL || "http://localhost:5000/images/logo.png";
+  return (
+    process.env.COMPANY_LOGO_URL || "http://localhost:5000/images/logo.png"
+  );
 }
 
 function getSignatureBase64Uri(relPath) {
@@ -53,11 +55,14 @@ function renderAdminReviewHtml(data) {
   const identity = data.identity || {};
   const documents = data.documents || [];
   const signatures = data.signatures || [];
-  const clientSig = signatures.find((s) => s.signerType === "Client") || signatures[0];
+  const clientSig =
+    signatures.find((s) => s.signerType === "Client") || signatures[0];
 
   const incomeActivities = parseArrayField(data.incomeActivities);
   const logoUri = getLogoBase64Uri();
-  const sigImageUri = clientSig?.signatureFilePath ? getSignatureBase64Uri(clientSig.signatureFilePath) : null;
+  const sigImageUri = clientSig?.signatureFilePath
+    ? getSignatureBase64Uri(clientSig.signatureFilePath)
+    : null;
   const now = new Date();
 
   return `
@@ -111,40 +116,40 @@ function renderAdminReviewHtml(data) {
     <tr>
       <th>Selected Tax Services</th>
       <td>
-        ${services.length > 0 ? services.map(s => `<span class="tag">${s.serviceName}</span>`).join(' ') : '<span class="tag">Individual Income Tax Return</span>'}
+        ${services.length > 0 ? services.map((s) => `<span class="tag">${s.serviceName}</span>`).join(" ") : '<span class="tag">Individual Income Tax Return</span>'}
       </td>
     </tr>
     <tr>
       <th>Additional Entity Service Needed?</th>
-      <td>${data.entityService || 'No'}</td>
+      <td>${data.entityService || "No"}</td>
     </tr>
   </table>
 
   <!-- Step 2: Personal Information -->
   <div class="section-head">Step 2: Personal Information</div>
   <table>
-    <tr><th>Full Legal Name</th><td>${client.fullName || 'N/A'}</td><th>Email Address</th><td>${client.email || 'N/A'}</td></tr>
-    <tr><th>Mobile Number</th><td>${client.mobile || 'N/A'}</td><th>Date of Birth</th><td>${client.dateOfBirth || 'N/A'}</td></tr>
-    <tr><th>Country of Birth</th><td>${client.birthCountry || 'N/A'}</td><th>City of Birth</th><td>${client.birthCity || 'N/A'}</td></tr>
-    <tr><th>Occupation</th><td>${client.occupation || 'N/A'}</td><th>Employment Status</th><td>${client.employmentStatus || 'N/A'}</td></tr>
-    <tr><th>Tax File Number (TFN)</th><td><strong>${client.tfn || client.maskedTfn || 'N/A'}</strong></td><th>About / Notes</th><td>${client.about || 'None'}</td></tr>
-    <tr><th>Has Previous / Maiden Name?</th><td>${data.hasPreviousName || 'No'}</td><th>Previous Names</th><td>${data.previousNames || 'N/A'}</td></tr>
-    <tr><th>Residential Address</th><td colspan="3">${data.address || 'N/A'}</td></tr>
-    <tr><th>Postal Address</th><td colspan="3">${data.postalAddress || data.address || 'Same as Residential Address'}</td></tr>
+    <tr><th>Full Legal Name</th><td>${client.fullName || "N/A"}</td><th>Email Address</th><td>${client.email || "N/A"}</td></tr>
+    <tr><th>Mobile Number</th><td>${client.mobile || "N/A"}</td><th>Date of Birth</th><td>${client.dateOfBirth || "N/A"}</td></tr>
+    <tr><th>Country of Birth</th><td>${client.birthCountry || "N/A"}</td><th>City of Birth</th><td>${client.birthCity || "N/A"}</td></tr>
+    <tr><th>Occupation</th><td>${client.occupation || "N/A"}</td><th>Employment Status</th><td>${client.employmentStatus || "N/A"}</td></tr>
+    <tr><th>Tax File Number (TFN)</th><td><strong>${client.tfn || client.maskedTfn || "N/A"}</strong></td><th>About / Notes</th><td>${client.about || "None"}</td></tr>
+    <tr><th>Has Previous / Maiden Name?</th><td>${data.hasPreviousName || "No"}</td><th>Previous Names</th><td>${data.previousNames || "N/A"}</td></tr>
+    <tr><th>Residential Address</th><td colspan="3">${data.address || "N/A"}</td></tr>
+    <tr><th>Postal Address</th><td colspan="3">${data.postalAddress || data.address || "Same as Residential Address"}</td></tr>
   </table>
 
   <!-- Step 3: Residency & Family Profile -->
   <div class="section-head">Step 3: Tax Residency & Family Profile</div>
   <table>
-    <tr><th>Australian Citizen</th><td>${data.isAustralianCitizen ? 'Yes' : 'No'}</td><th>Country of Citizenship</th><td>${data.citizenshipCountry || 'Australia'}</td></tr>
-    <tr><th>Visa Status</th><td>${data.visaStatus || 'N/A'}</td><th>Visa Subclass</th><td>${data.visaSubclass || 'N/A'}</td></tr>
-    <tr><th>Visa Expiry Date</th><td>${data.visaExpiry || 'N/A'}</td><th>First Arrival Date</th><td>${data.arrivalDate || 'N/A'}</td></tr>
-    <tr><th>Tax Residency Status</th><td colspan="3"><strong>${data.taxResidency || 'Australian Resident'}</strong></td></tr>
-    <tr><th>Date Became Resident</th><td>${data.residentArrival || 'N/A'}</td><th>Date Ceased Resident</th><td>${data.residentDeparture || 'N/A'}</td></tr>
-    <tr><th>Foreign Country of Residence</th><td>${data.foreignCountry || 'N/A'}</td><th>Overseas Income & Assets</th><td>${data.foreignInfo || 'None'}</td></tr>
-    <tr><th>Has Spouse</th><td>${data.hasSpouse || 'No'}</td><th>Spouse Full Name</th><td>${data.spouseName || 'N/A'}</td></tr>
-    <tr><th>Spouse Date of Birth</th><td>${data.spouseDob || 'N/A'}</td><th>Spouse Taxable Income</th><td>${data.spouseIncome ? `$${data.spouseIncome}` : 'N/A'}</td></tr>
-    <tr><th>Prepare Spouse Return?</th><td>${data.prepareSpouseReturn || 'No'}</td><th>Has Dependants</th><td>${data.hasDependants || 'No'} (${data.dependantCount || 0} children)</td></tr>
+    <tr><th>Australian Citizen</th><td>${data.isAustralianCitizen ? "Yes" : "No"}</td><th>Country of Citizenship</th><td>${data.citizenshipCountry || "Australia"}</td></tr>
+    <tr><th>Visa Status</th><td>${data.visaStatus || "N/A"}</td><th>Visa Subclass</th><td>${data.visaSubclass || "N/A"}</td></tr>
+    <tr><th>Visa Expiry Date</th><td>${data.visaExpiry || "N/A"}</td><th>First Arrival Date</th><td>${data.arrivalDate || "N/A"}</td></tr>
+    <tr><th>Tax Residency Status</th><td colspan="3"><strong>${data.taxResidency || "Australian Resident"}</strong></td></tr>
+    <tr><th>Date Became Resident</th><td>${data.residentArrival || "N/A"}</td><th>Date Ceased Resident</th><td>${data.residentDeparture || "N/A"}</td></tr>
+    <tr><th>Foreign Country of Residence</th><td>${data.foreignCountry || "N/A"}</td><th>Overseas Income & Assets</th><td>${data.foreignInfo || "None"}</td></tr>
+    <tr><th>Has Spouse</th><td>${data.hasSpouse || "No"}</td><th>Spouse Full Name</th><td>${data.spouseName || "N/A"}</td></tr>
+    <tr><th>Spouse Date of Birth</th><td>${data.spouseDob || "N/A"}</td><th>Spouse Taxable Income</th><td>${data.spouseIncome ? `$${data.spouseIncome}` : "N/A"}</td></tr>
+    <tr><th>Prepare Spouse Return?</th><td>${data.prepareSpouseReturn || "No"}</td><th>Has Dependants</th><td>${data.hasDependants || "No"} (${data.dependantCount || 0} children)</td></tr>
   </table>
 
   <!-- Step 4: Income Profile & ATO Matters -->
@@ -153,38 +158,38 @@ function renderAdminReviewHtml(data) {
     <tr>
       <th>Selected Income Activities</th>
       <td colspan="3">
-        ${incomeActivities.length > 0 ? incomeActivities.map(act => `<span class="tag">${act}</span>`).join(' ') : '<span class="tag">Salary/Wages</span>'}
+        ${incomeActivities.length > 0 ? incomeActivities.map((act) => `<span class="tag">${act}</span>`).join(" ") : '<span class="tag">Salary/Wages</span>'}
       </td>
     </tr>
-    <tr><th>Had Previous Tax Agent</th><td>${data.hadPreviousAccountant || 'No'}</td><th>Previous Firm Name</th><td>${data.previousFirm || 'N/A'}</td></tr>
-    <tr><th>Authorise Ethical Contact</th><td>${data.authorisePreviousAdvisor || 'N/A'}</td><th>Reason for Change</th><td>${data.reasonForChange || 'N/A'}</td></tr>
-    <tr><th>ATO Debts / Disputes / Audits</th><td><strong>${data.atoIssues || 'No'}</strong></td><th>ATO Matter Description</th><td>${data.atoExplanation || 'None'}</td></tr>
-    <tr><th>ATO Notice Date</th><td>${data.noticeDate || 'N/A'}</td><th>ATO Due Date</th><td>${data.dueDate || 'N/A'}</td></tr>
+    <tr><th>Had Previous Tax Agent</th><td>${data.hadPreviousAccountant || "No"}</td><th>Previous Firm Name</th><td>${data.previousFirm || "N/A"}</td></tr>
+    <tr><th>Authorise Ethical Contact</th><td>${data.authorisePreviousAdvisor || "N/A"}</td><th>Reason for Change</th><td>${data.reasonForChange || "N/A"}</td></tr>
+    <tr><th>ATO Debts / Disputes / Audits</th><td><strong>${data.atoIssues || "No"}</strong></td><th>ATO Matter Description</th><td>${data.atoExplanation || "None"}</td></tr>
+    <tr><th>ATO Notice Date</th><td>${data.noticeDate || "N/A"}</td><th>ATO Due Date</th><td>${data.dueDate || "N/A"}</td></tr>
   </table>
 
   <!-- Step 5: Sole Trader / BAS / ABN / GST Profile -->
   <div class="section-head">Step 5: Sole Trader, BAS, ABN & GST Profile</div>
   <table>
-    <tr><th>Existing ABN</th><td>${data.existingAbn || 'None'}</td><th>ABN Status</th><td>${data.abnStatus || 'N/A'}</td></tr>
-    <tr><th>BAS Lodgement Period</th><td>${data.basPeriod || 'N/A'}</td><th>GST Reporting Frequency</th><td>${data.reportingFrequency || 'N/A'}</td></tr>
-    <tr><th>GST Registration Status</th><td>${data.gstStatus || 'N/A'}</td><th>Overdue BAS Statements?</th><td>${data.overdueBas || 'No'}</td></tr>
-    <tr><th>Accounting Records Complete?</th><td>${data.recordsComplete || 'Yes'}</td><th>Maintained By</th><td>${data.recordsMaintainedBy || 'Client'}</td></tr>
-    <tr><th>Business Start Date</th><td>${data.businessStartDate || 'N/A'}</td><th>Primary Business Activity</th><td>${data.businessActivity || 'N/A'}</td></tr>
-    <tr><th>Business Location</th><td>${data.businessLocation || 'N/A'}</td><th>Expected Annual Turnover</th><td>${data.expectedTurnover ? `$${data.expectedTurnover}` : 'N/A'}</td></tr>
-    <tr><th>Profit Expectation</th><td>${data.profitExpectation || 'Yes'}</td><th>Has Employees / PAYG</th><td>${data.hasEmployees || 'No'} (PAYG Reg: ${data.registerPAYG || 'No'})</td></tr>
-    <tr><th>Register for GST?</th><td>${data.registerGST || 'No'}</td><th>GST Effective Date</th><td>${data.gstEffectiveDate || 'N/A'}</td></tr>
-    <tr><th>Accounting Method</th><td>${data.accountingMethod || 'Cash'}</td><th>Fuel Tax / Imports / Exports</th><td>Fuel: ${data.fuelTaxCredits || 'No'} | Imports: ${data.imports || 'No'} | Exports: ${data.exports || 'No'}</td></tr>
+    <tr><th>Existing ABN</th><td>${data.existingAbn || "None"}</td><th>ABN Status</th><td>${data.abnStatus || "N/A"}</td></tr>
+    <tr><th>BAS Lodgement Period</th><td>${data.basPeriod || "N/A"}</td><th>GST Reporting Frequency</th><td>${data.reportingFrequency || "N/A"}</td></tr>
+    <tr><th>GST Registration Status</th><td>${data.gstStatus || "N/A"}</td><th>Overdue BAS Statements?</th><td>${data.overdueBas || "No"}</td></tr>
+    <tr><th>Accounting Records Complete?</th><td>${data.recordsComplete || "Yes"}</td><th>Maintained By</th><td>${data.recordsMaintainedBy || "Client"}</td></tr>
+    <tr><th>Business Start Date</th><td>${data.businessStartDate || "N/A"}</td><th>Primary Business Activity</th><td>${data.businessActivity || "N/A"}</td></tr>
+    <tr><th>Business Location</th><td>${data.businessLocation || "N/A"}</td><th>Expected Annual Turnover</th><td>${data.expectedTurnover ? `$${data.expectedTurnover}` : "N/A"}</td></tr>
+    <tr><th>Profit Expectation</th><td>${data.profitExpectation || "Yes"}</td><th>Has Employees / PAYG</th><td>${data.hasEmployees || "No"} (PAYG Reg: ${data.registerPAYG || "No"})</td></tr>
+    <tr><th>Register for GST?</th><td>${data.registerGST || "No"}</td><th>GST Effective Date</th><td>${data.gstEffectiveDate || "N/A"}</td></tr>
+    <tr><th>Accounting Method</th><td>${data.accountingMethod || "Cash"}</td><th>Fuel Tax / Imports / Exports</th><td>Fuel: ${data.fuelTaxCredits || "No"} | Imports: ${data.imports || "No"} | Exports: ${data.exports || "No"}</td></tr>
   </table>
 
   <!-- Step 6: Documents & TPB Identity Verification -->
   <div class="section-head">Step 6: Documents & Identity Verification</div>
   <table>
-    <tr><th>ID Verification Method</th><td>${identity.identityMethod || 'Upload ID'}</td><th>DVS Status</th><td><strong>${identity.dvsStatus || 'Pass'}</strong></td></tr>
-    <tr><th>No Photo ID Reason</th><td colspan="3">${identity.noPhotoIdReason || 'N/A'}</td></tr>
+    <tr><th>ID Verification Method</th><td>${identity.identityMethod || "Upload ID"}</td><th>DVS Status</th><td><strong>${identity.dvsStatus || "Pass"}</strong></td></tr>
+    <tr><th>No Photo ID Reason</th><td colspan="3">${identity.noPhotoIdReason || "N/A"}</td></tr>
     <tr>
       <th>Uploaded Documents</th>
       <td colspan="3">
-        ${documents.length > 0 ? documents.map(d => `<span class="tag">${d.documentCategory}: ${d.fileName}</span>`).join(' ') : 'No document files attached'}
+        ${documents.length > 0 ? documents.map((d) => `<span class="tag">${d.documentCategory}: ${d.fileName}</span>`).join(" ") : "No document files attached"}
       </td>
     </tr>
   </table>
@@ -192,10 +197,10 @@ function renderAdminReviewHtml(data) {
   <!-- Step 7: Representative & Refund Bank Account -->
   <div class="section-head">Step 7: Representative & Refund Bank Account</div>
   <table>
-    <tr><th>Submitting For Self?</th><td>${data.isSelf || 'Yes'}</td><th>Representative Name</th><td>${data.repName || 'N/A'} (${data.relationship || 'N/A'})</td></tr>
-    <tr><th>Representative Authority</th><td colspan="3">${data.authorityDesc || 'N/A'}</td></tr>
-    <tr><th>Refund Bank Account Required?</th><td>${data.needBank || 'Yes'}</td><th>Account Name</th><td>${data.accountName || 'N/A'}</td></tr>
-    <tr><th>BSB</th><td>${data.bsb || 'N/A'}</td><th>Account Number</th><td>${data.accountNumber || 'N/A'}</td></tr>
+    <tr><th>Submitting For Self?</th><td>${data.isSelf || "Yes"}</td><th>Representative Name</th><td>${data.repName || "N/A"} (${data.relationship || "N/A"})</td></tr>
+    <tr><th>Representative Authority</th><td colspan="3">${data.authorityDesc || "N/A"}</td></tr>
+    <tr><th>Refund Bank Account Required?</th><td>${data.needBank || "Yes"}</td><th>Account Name</th><td>${data.accountName || "N/A"}</td></tr>
+    <tr><th>BSB</th><td>${data.bsb || "N/A"}</td><th>Account Number</th><td>${data.accountNumber || "N/A"}</td></tr>
   </table>
 
   <!-- Step 8 & 9: Legal Consents & Declarations -->
@@ -208,18 +213,22 @@ function renderAdminReviewHtml(data) {
   <!-- Step 10: Electronic Signature Verification -->
   <div class="section-head">Step 10: Electronic Signature Verification Stamp</div>
   <div class="signature-box">
-    <div>Signer Name: <strong>${clientSig?.signerFullName || client.fullName}</strong> | Method: <strong>${clientSig?.signatureMethod || 'draw'}</strong></div>
-    ${sigImageUri ? `
+    <div>Signer Name: <strong>${clientSig?.signerFullName || client.fullName}</strong> | Method: <strong>${clientSig?.signatureMethod || "draw"}</strong></div>
+    ${
+      sigImageUri
+        ? `
       <div style="margin-top: 8px;">
         <img src="${sigImageUri}" style="max-height: 55px; max-width: 250px; border-bottom: 2px solid #008043; object-fit: contain;" />
       </div>
-    ` : `
+    `
+        : `
       <div style="font-family: cursive; font-size: 20px; color: #008043; margin-top: 6px;">
         ${clientSig?.signerFullName || client.fullName}
       </div>
-    `}
+    `
+    }
     <div style="font-size: 9.5px; color: #047857; margin-top: 6px;">
-      IP Address: ${clientSig?.ipAddress || '127.0.0.1'} | Timestamp: ${now.toLocaleString('en-AU')} | ETA 1999 Legally Binding
+      IP Address: ${clientSig?.ipAddress || "127.0.0.1"} | Timestamp: ${now.toLocaleString("en-AU")} | ETA 1999 Legally Binding
     </div>
   </div>
 
@@ -229,22 +238,22 @@ function renderAdminReviewHtml(data) {
     <tr>
       <th>Overall Risk Level</th>
       <td>
-        <span class="risk-badge ${data.riskLevel === 'High' || data.riskLevel === 'Unacceptable' ? 'risk-high' : 'risk-low'}">
-          ${data.riskLevel || 'Low Risk'}
+        <span class="risk-badge ${data.riskLevel === "High" || data.riskLevel === "Unacceptable" ? "risk-high" : "risk-low"}">
+          ${data.riskLevel || "Low Risk"}
         </span>
       </td>
       <th>Review Status</th>
-      <td><strong>${data.status || 'Pending Review'}</strong></td>
+      <td><strong>${data.status || "Pending Review"}</strong></td>
     </tr>
     <tr>
       <th>Tax Agent Reviewer Notes</th>
-      <td colspan="3">${data.riskNotes || 'Initial automated submission logged. Awaiting Tax Agent review.'}</td>
+      <td colspan="3">${data.riskNotes || "Initial automated submission logged. Awaiting Tax Agent review."}</td>
     </tr>
   </table>
 
   <!-- Footer -->
   <div class="footer">
-    INTERNAL CONFIDENTIAL DOCUMENT — FOR TAX AGENT & COMPLIANCE OFFICERS ONLY — FINANCIALLY UP ERP
+    INTERNAL CONFIDENTIAL DOCUMENT - FOR TAX AGENT & COMPLIANCE OFFICERS ONLY - FINANCIALLY UP ERP
   </div>
 
 </body>

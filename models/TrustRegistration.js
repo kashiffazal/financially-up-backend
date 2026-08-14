@@ -50,7 +50,7 @@ const TrustRegistration = sequelize.define("trust_registrations", {
   },
 
   // ============================
-  // Trustee 1 — Personal Details
+  // Trustee 1 - Personal Details
   // ============================
 
   /** First name */
@@ -72,7 +72,7 @@ const TrustRegistration = sequelize.define("trust_registrations", {
   },
 
   // ============================
-  // Trustee 1 — Address
+  // Trustee 1 - Address
   // ============================
 
   housenumber: {
@@ -289,7 +289,7 @@ const TrustRegistration = sequelize.define("trust_registrations", {
     allowNull: true,
   },
 
-  /** Workflow status — managed by admin panel */
+  /** Workflow status - managed by admin panel */
   status: {
     type: DataTypes.TEXT,
     allowNull: false,

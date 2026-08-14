@@ -22,19 +22,14 @@ const { Op } = require("sequelize");
  * Fetch all GST registration records with pagination, status filtering, and search.
  *
  * Query Parameters:
- * - page (default: 1) — current page number
- * - limit (default: 10) — records per page
- * - status — filter by workflow status (e.g., "New Query", "Approved")
- * - search — search across firstName, lastName, email, phone, abn
+ * - page (default: 1) - current page number
+ * - limit (default: 10) - records per page
+ * - status - filter by workflow status (e.g., "New Query", "Approved")
+ * - search - search across firstName, lastName, email, phone, abn
  */
 const getAll = async (req, res, next) => {
   try {
-    const {
-      page = 1,
-      limit = 10,
-      status,
-      search,
-    } = req.query;
+    const { page = 1, limit = 10, status, search } = req.query;
 
     // Build dynamic WHERE clause based on query parameters
     const whereClause = {};
@@ -66,15 +61,19 @@ const getAll = async (req, res, next) => {
       order: [["createdAt", "DESC"]], // Newest first
     });
 
-    return successResponse(res, "GST registration records fetched successfully", {
-      records: rows,
-      pagination: {
-        total: count,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        totalPages: Math.ceil(count / parseInt(limit)),
+    return successResponse(
+      res,
+      "GST registration records fetched successfully",
+      {
+        records: rows,
+        pagination: {
+          total: count,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          totalPages: Math.ceil(count / parseInt(limit)),
+        },
       },
-    });
+    );
   } catch (error) {
     next(error);
   }
@@ -94,7 +93,11 @@ const getById = async (req, res, next) => {
       return errorResponse(res, "GST registration record not found", 404);
     }
 
-    return successResponse(res, "GST registration record fetched successfully", record);
+    return successResponse(
+      res,
+      "GST registration record fetched successfully",
+      record,
+    );
   } catch (error) {
     next(error);
   }
@@ -114,14 +117,14 @@ const create = async (req, res, next) => {
       formData.status = "New Query";
     }
 
-    // Create the record — Sequelize will only save fields that match the model
+    // Create the record - Sequelize will only save fields that match the model
     const record = await GstRegistration.create(formData);
 
     return successResponse(
       res,
       "GST registration record created successfully",
       record,
-      201
+      201,
     );
   } catch (error) {
     next(error);
@@ -145,7 +148,11 @@ const update = async (req, res, next) => {
 
     await record.update(updateData);
 
-    return successResponse(res, "GST registration record updated successfully", record);
+    return successResponse(
+      res,
+      "GST registration record updated successfully",
+      record,
+    );
   } catch (error) {
     next(error);
   }

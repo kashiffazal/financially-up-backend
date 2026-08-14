@@ -3,6 +3,7 @@
  * ==========================
  * Sequelize model for 'new_individual_consents' table.
  * Records statutory legal consents (TASA 2009, Privacy, ATO Authority, Biometric, Cloud Processing).
+ * Stores audit fields: documentType, version, openedAt, acceptedAt.
  */
 
 const { DataTypes } = require("sequelize");
@@ -21,6 +22,18 @@ const NewIndividualConsent = sequelize.define("new_individual_consents", {
   consentType: {
     type: DataTypes.STRING(100),
     allowNull: false,
+  },
+  documentType: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+  },
+  version: {
+    type: DataTypes.STRING(20),
+    allowNull: true,
+  },
+  openedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
   },
   accepted: {
     type: DataTypes.BOOLEAN,
