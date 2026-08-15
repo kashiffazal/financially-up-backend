@@ -102,9 +102,9 @@ The system looks at certain answers and assigns a risk rating:
 
 | Total Points | Risk Level      |
 | ------------ | --------------- |
-| 0–1          | 🟢 Low          |
-| 2–3          | 🟡 Medium       |
-| 4–5          | 🟠 High         |
+| 0-1          | 🟢 Low          |
+| 2-3          | 🟡 Medium       |
+| 4-5          | 🟠 High         |
 | 6+           | 🔴 Unacceptable |
 
 **5. Two PDF documents are generated**

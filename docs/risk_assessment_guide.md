@@ -53,19 +53,19 @@ Based on the total cumulative Risk Score, the system assigns one of four standar
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 🟢 Low Risk (Score: 0 – 1)
+### 🟢 Low Risk (Score: 0 - 1)
 
 - **Profile:** Standard salary/wage earners (PAYG), Australian residents with valid primary photo ID (Driver's License/Passport), clean ATO lodgement history, and no active disputes.
 - **Workflow Action:** Direct Tax Agent fast-track approval.
 - **PDF Badge:** `Low` (Green badge in Admin Review & Audit PDFs).
 
-### 🟡 Medium Risk (Score: 2 – 3)
+### 🟡 Medium Risk (Score: 2 - 3)
 
 - **Profile:** Clients with Sole Trader ABN/GST registrations, representative filings, overseas income, or minor past ATO payment arrangements.
 - **Workflow Action:** Tax Agent verifies uploaded supporting documents (utility bill, Medicare card, authority letter) before countersigning.
 - **PDF Badge:** `Medium` (Amber badge).
 
-### 🔴 High Risk (Score: 4 – 5)
+### 🔴 High Risk (Score: 4 - 5)
 
 - **Profile:** Ongoing ATO audits, undisclosed debts, missing primary photo ID, high business turnover (> $500k), or complex multi-jurisdictional tax affairs.
 - **Workflow Action:** Requires Senior Tax Agent sign-off and secondary identity confirmation before engagement acceptance.

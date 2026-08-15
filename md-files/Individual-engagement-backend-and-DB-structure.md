@@ -9,7 +9,7 @@
 
 ## 📌 Executive Summary
 
-This plan details the backend technical architecture for the **New Individual Client Engagement System** as specified in `agent-data/Individual-Engagement-form` (Parts 1–18):
+This plan details the backend technical architecture for the **New Individual Client Engagement System** as specified in `agent-data/Individual-Engagement-form` (Parts 1-18):
 
 1. **Submission API:** Payload (form fields, base64 signature, uploaded files) is validated and stored across normalized MySQL tables (`new_individual_*`).
 2. **Reusable File & Signature Processing:** Base64 signature canvas data is converted to PNG image files stored securely in `/public/uploads/signatures/`, and uploaded files are saved in `/public/uploads/documents/`.
