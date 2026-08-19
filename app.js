@@ -29,6 +29,7 @@ const changesToCompanyDetailsRoutes = require("./routes/changesToCompanyDetails.
 const smsfRegistrationRoutes = require("./routes/smsfRegistration.routes");
 const companyRegistrationRoutes = require("./routes/companyRegistration.routes");
 const newIndividualEngagementRoutes = require("./routes/newIndividualEngagement.routes");
+const newCompanyRegistrationRoutes = require("./routes/newCompanyRegistration.routes");
 
 // Create Express app
 const app = express();
@@ -125,6 +126,9 @@ app.use("/api/company-registrations", companyRegistrationRoutes);
 
 // New Individual Engagement routes
 app.use("/api/new-individual-engagements", newIndividualEngagementRoutes);
+
+// New Company Registration routes
+app.use("/api/new-company-registrations", newCompanyRegistrationRoutes);
 
 // ============================
 // Future Route Registrations

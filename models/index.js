@@ -33,6 +33,17 @@ const NewIndividualLodgment = require("./NewIndividualLodgment");
 const NewIndividualLodgmentDeclaration = require("./NewIndividualLodgmentDeclaration");
 const NewIndividualAdminReview = require("./NewIndividualAdminReview");
 
+// New Company Registration Models
+const NewCompanyRegistration = require("./NewCompanyRegistration");
+const NewCompanyOfficeholder = require("./NewCompanyOfficeholder");
+const NewCompanyShareholder = require("./NewCompanyShareholder");
+const NewCompanyBeneficialOwner = require("./NewCompanyBeneficialOwner");
+const NewCompanyConsent = require("./NewCompanyConsent");
+const NewCompanyDocument = require("./NewCompanyDocument");
+const NewCompanyAdminReview = require("./NewCompanyAdminReview");
+const NewCompanyPdf = require("./NewCompanyPdf");
+const NewCompanyAuditLog = require("./NewCompanyAuditLog");
+
 // ============================
 // Define New Model Associations
 // ============================
@@ -69,6 +80,34 @@ NewIndividualLodgmentDeclaration.belongsTo(NewIndividualLodgment, { foreignKey: 
 NewIndividualEngagement.hasOne(NewIndividualAdminReview, { foreignKey: "engagementId", as: "adminReview" });
 NewIndividualAdminReview.belongsTo(NewIndividualEngagement, { foreignKey: "engagementId" });
 
+
+// ============================
+// New Company Registration Associations
+// ============================
+NewCompanyRegistration.hasMany(NewCompanyOfficeholder, { foreignKey: "registrationId", as: "officeholders" });
+NewCompanyOfficeholder.belongsTo(NewCompanyRegistration, { foreignKey: "registrationId" });
+
+NewCompanyRegistration.hasMany(NewCompanyShareholder, { foreignKey: "registrationId", as: "shareholders" });
+NewCompanyShareholder.belongsTo(NewCompanyRegistration, { foreignKey: "registrationId" });
+
+NewCompanyRegistration.hasMany(NewCompanyBeneficialOwner, { foreignKey: "registrationId", as: "beneficialOwners" });
+NewCompanyBeneficialOwner.belongsTo(NewCompanyRegistration, { foreignKey: "registrationId" });
+
+NewCompanyRegistration.hasMany(NewCompanyConsent, { foreignKey: "registrationId", as: "consents" });
+NewCompanyConsent.belongsTo(NewCompanyRegistration, { foreignKey: "registrationId" });
+
+NewCompanyRegistration.hasMany(NewCompanyDocument, { foreignKey: "registrationId", as: "documents" });
+NewCompanyDocument.belongsTo(NewCompanyRegistration, { foreignKey: "registrationId" });
+
+NewCompanyRegistration.hasOne(NewCompanyAdminReview, { foreignKey: "registrationId", as: "adminReview" });
+NewCompanyAdminReview.belongsTo(NewCompanyRegistration, { foreignKey: "registrationId" });
+
+NewCompanyRegistration.hasMany(NewCompanyPdf, { foreignKey: "registrationId", as: "pdfs" });
+NewCompanyPdf.belongsTo(NewCompanyRegistration, { foreignKey: "registrationId" });
+
+NewCompanyRegistration.hasMany(NewCompanyAuditLog, { foreignKey: "registrationId", as: "auditLogs" });
+NewCompanyAuditLog.belongsTo(NewCompanyRegistration, { foreignKey: "registrationId" });
+
 // Export all models and the sequelize instance
 module.exports = {
   sequelize,
@@ -96,4 +135,14 @@ module.exports = {
   NewIndividualLodgment,
   NewIndividualLodgmentDeclaration,
   NewIndividualAdminReview,
+  // New Company Registration
+  NewCompanyRegistration,
+  NewCompanyOfficeholder,
+  NewCompanyShareholder,
+  NewCompanyBeneficialOwner,
+  NewCompanyConsent,
+  NewCompanyDocument,
+  NewCompanyAdminReview,
+  NewCompanyPdf,
+  NewCompanyAuditLog,
 };
