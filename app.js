@@ -2,22 +2,31 @@
  * Express Application Setup
  * ==========================
  * Creates and configures the Express app with:
- * - CORS (allows Old App and Admin Panel to call the API)
+ * - CORS (allows Next.js App and Admin Panel to call the API)
  * - Helmet (security headers)
+ * - Cookie Parser (for secure HttpOnly JWT session tokens)
  * - JSON body parsing
- * - Route registration
+ * - Authentication & RBAC Route registration
  * - Global error handler
  *
  * This file does NOT start the server - that's done in index.js.
- * PDF Engine Version: Part 20 Spec with new_individual_pdfs table.
  */
 
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
+const cookieParser = require("cookie-parser");
+const path = require("path");
 const errorHandler = require("./middleware/errorHandler");
 
-// Import route files
+// Import Auth & RBAC Route files
+const authRoutes = require("./routes/auth.routes");
+const userRoutes = require("./routes/user.routes");
+const roleRoutes = require("./routes/role.routes");
+const permissionRoutes = require("./routes/permission.routes");
+const auditRoutes = require("./routes/audit.routes");
+
+// Import Application Route files
 const individualEngagementRoutes = require("./routes/individualEngagement.routes");
 const applyTfnAbnsRoutes = require("./routes/applyTfnAbns.routes");
 const gstRegistrationRoutes = require("./routes/gstRegistration.routes");
@@ -53,27 +62,26 @@ app.use(
       }
       return callback(null, true);
     },
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
     credentials: true,
-  }),
+  })
 );
 
 // Security headers (XSS protection, content-type sniffing prevention, etc.)
-// crossOriginResourcePolicy set to "cross-origin" so the API can serve
-// files (PDFs, images, uploads) to the frontend on a different domain.
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" },
-  }),
+  })
 );
 
-// Parse incoming JSON request bodies (form data from Old App will arrive as JSON)
-app.use(express.json({ limit: "10mb" })); // 10mb limit to handle base64 signatures
+// Parse Cookie headers for HttpOnly session tokens
+app.use(cookieParser());
 
-const path = require("path");
+// Parse incoming JSON request bodies
+app.use(express.json({ limit: "10mb" })); // 10mb limit to handle base64 signatures and files
 
-// Parse URL-encoded bodies (for traditional form submissions)
+// Parse URL-encoded bodies
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Serve static uploaded files (PDFs, signatures, documents)
@@ -84,7 +92,7 @@ app.use("/api/uploads", express.static(path.join(__dirname, "public/uploads")));
 // Routes
 // ============================
 
-// Health check endpoint - useful for monitoring and deployment checks
+// Health check endpoint
 app.get("/api/health", (req, res) => {
   res.json({
     success: true,
@@ -94,47 +102,26 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// Individual Engagement routes
+// Authentication & Identity Management
+app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/roles", roleRoutes);
+app.use("/api/permissions", permissionRoutes);
+app.use("/api/audit-logs", auditRoutes);
+
+// Operational Form and Application Routes
 app.use("/api/individual-engagement", individualEngagementRoutes);
-
-// Apply TFN & ABNs routes
 app.use("/api/apply-tfn-abns", applyTfnAbnsRoutes);
-
-// GST Registrations routes
 app.use("/api/gst-registrations", gstRegistrationRoutes);
-
-// Business Name Registrations routes
 app.use("/api/business-name-registrations", businessNameRegistrationRoutes);
-
-// Medicare routes
 app.use("/api/medicare", medicareRoutes);
-
-// Trust Registrations routes
 app.use("/api/trust-registrations", trustRegistrationRoutes);
-
-// Entity Engagements routes
 app.use("/api/entity-engagements", entityEngagementRoutes);
-
-// Changes to Company Details routes
 app.use("/api/changes-to-company-details", changesToCompanyDetailsRoutes);
-
-// SMSF Registration routes
 app.use("/api/smsf-registrations", smsfRegistrationRoutes);
-
-// Company Registration routes
 app.use("/api/company-registrations", companyRegistrationRoutes);
-
-// New Individual Engagement routes
 app.use("/api/new-individual-engagements", newIndividualEngagementRoutes);
-
-// New Company Registration routes
 app.use("/api/new-company-registrations", newCompanyRegistrationRoutes);
-
-// ============================
-// Future Route Registrations
-// ============================
-// As new forms are added, register their routes here:
-// app.use("/api/company-registration", companyRegistrationRoutes);
 
 // ============================
 // Error Handling

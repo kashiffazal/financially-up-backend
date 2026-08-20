@@ -70,6 +70,10 @@ const startServer = async () => {
     await sequelize.sync();
     console.log("✅ Database tables synced successfully.");
 
+    // Seed RBAC permissions, roles, and initial administrator
+    const { seedRBAC } = require("./utils/rbacSeed");
+    await seedRBAC();
+
     // Start the Express server
     app.listen(PORT, () => {
       console.log(`🚀 Server is running on port ${PORT}`);
