@@ -238,5 +238,6 @@ module.exports = {
   generateAdminReviewPDF,
   generateEngagementAcceptancePDF,
   generateAuditReportPDF,
+  renderHtmlToPdf,
   savePdfRecord,
 };

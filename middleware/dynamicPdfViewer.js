@@ -10,11 +10,15 @@ const uploadsStaticDir = path.join(__dirname, "../public/uploads");
 let individualTemplates = null;
 let companyTemplates = null;
 let models = null;
+let renderHtmlToPdf = null;
 
 function loadDependencies() {
   if (!models) {
     try {
       models = require("../models");
+      const pdfService = require("../services/individualPdf.service");
+      renderHtmlToPdf = pdfService.renderHtmlToPdf;
+
       individualTemplates = {
         renderClientEngagementHtml: require("../pdf/templates/individual-engagement/clientEngagementTemplate").renderClientEngagementHtml,
         renderAdminReviewHtml: require("../pdf/templates/individual-engagement/adminReviewTemplate").renderAdminReviewHtml,
@@ -41,18 +45,86 @@ async function dynamicPdfViewer(req, res, next) {
 
     // 1. If exact file exists on disk, serve it immediately
     if (fs.existsSync(diskPath) && fs.statSync(diskPath).isFile()) {
+      if (diskPath.endsWith(".pdf")) {
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `inline; filename="${path.basename(diskPath)}"`);
+      }
       return res.sendFile(diskPath);
     }
 
-    // 2. If .pdf requested, check if .html companion exists
-    if (reqPath.endsWith(".pdf")) {
-      const htmlPath = diskPath.replace(/\.pdf$/, ".html");
-      if (fs.existsSync(htmlPath) && fs.statSync(htmlPath).isFile()) {
-        res.setHeader("Content-Type", "text/html; charset=utf-8");
-        return res.sendFile(htmlPath);
+    // 2. Signature image auto-restoration
+    if (reqPath.includes("signatures") && (reqPath.endsWith(".png") || reqPath.endsWith(".jpg") || reqPath.endsWith(".jpeg"))) {
+      loadDependencies();
+      const sigFilename = path.basename(reqPath);
+
+      let sigRecord = null;
+      if (models?.NewIndividualSignature) {
+        try {
+          sigRecord = await models.NewIndividualSignature.findOne({
+            where: {
+              signatureFilePath: { [Op.like]: `%${sigFilename}%` },
+            },
+          });
+        } catch (e) {}
       }
 
-      // 3. On-demand document generation from MySQL database
+      if (!sigRecord && models?.NewIndividualAdminReview) {
+        try {
+          sigRecord = await models.NewIndividualAdminReview.findOne({
+            where: {
+              signatureFilePath: { [Op.like]: `%${sigFilename}%` },
+            },
+          });
+        } catch (e) {}
+      }
+
+      if (!sigRecord && models?.NewCompanyOfficeholder) {
+        try {
+          sigRecord = await models.NewCompanyOfficeholder.findOne({
+            where: {
+              signatureData: { [Op.like]: `%${sigFilename}%` },
+            },
+          });
+        } catch (e) {}
+      }
+
+      const dir = path.dirname(diskPath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+      if (sigRecord) {
+        const drawnData = sigRecord.signatureDrawnData || sigRecord.signatureData || sigRecord.signatory1Signature || sigRecord.signatory2Signature;
+        if (drawnData && typeof drawnData === "string" && drawnData.startsWith("data:image")) {
+          const base64Data = drawnData.replace(/^data:image\/\w+;base64,/, "");
+          const buffer = Buffer.from(base64Data, "base64");
+          fs.writeFileSync(diskPath, buffer);
+          res.setHeader("Content-Type", "image/png");
+          return res.sendFile(diskPath);
+        }
+
+        const typedName = sigRecord.signerFullName || sigRecord.typedSignatureText || sigRecord.signatureTypedName || sigRecord.fullName;
+        if (typedName) {
+          const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="120" viewBox="0 0 400 120">
+            <rect width="100%" height="100%" fill="transparent"/>
+            <text x="20" y="70" font-family="'Brush Script MT', 'Dancing Script', cursive, sans-serif" font-size="36" font-style="italic" fill="#008043">${typedName}</text>
+          </svg>`;
+          res.setHeader("Content-Type", "image/svg+xml");
+          return res.send(svgContent);
+        }
+      }
+
+      // Default transparent 1x1 PNG fallback so signature images never 404
+      const transparentPixel = Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+        "base64"
+      );
+      res.setHeader("Content-Type", "image/png");
+      return res.send(transparentPixel);
+    }
+
+    // 3. If .pdf requested, generate binary PDF from MySQL database
+    if (reqPath.endsWith(".pdf")) {
+      const htmlPath = diskPath.replace(/\.pdf$/, ".html");
+
       loadDependencies();
       const filename = path.basename(reqPath);
 
@@ -122,6 +194,21 @@ async function dynamicPdfViewer(req, res, next) {
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
             fs.writeFileSync(htmlPath, renderedHtml);
 
+            if (renderHtmlToPdf) {
+              try {
+                await renderHtmlToPdf(renderedHtml, diskPath);
+              } catch (pdfGenErr) {
+                console.warn("PDF compilation notice:", pdfGenErr.message);
+              }
+            }
+
+            if (fs.existsSync(diskPath) && fs.statSync(diskPath).isFile()) {
+              res.setHeader("Content-Type", "application/pdf");
+              res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
+              return res.sendFile(diskPath);
+            }
+
+            // If Puppeteer could not compile binary PDF, serve styled HTML fallback
             res.setHeader("Content-Type", "text/html; charset=utf-8");
             return res.send(renderedHtml);
           }
@@ -169,10 +256,30 @@ async function dynamicPdfViewer(req, res, next) {
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
             fs.writeFileSync(htmlPath, renderedHtml);
 
+            if (renderHtmlToPdf) {
+              try {
+                await renderHtmlToPdf(renderedHtml, diskPath);
+              } catch (pdfGenErr) {
+                console.warn("Company PDF compilation notice:", pdfGenErr.message);
+              }
+            }
+
+            if (fs.existsSync(diskPath) && fs.statSync(diskPath).isFile()) {
+              res.setHeader("Content-Type", "application/pdf");
+              res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
+              return res.sendFile(diskPath);
+            }
+
             res.setHeader("Content-Type", "text/html; charset=utf-8");
             return res.send(renderedHtml);
           }
         }
+      }
+
+      // If .html companion already exists on disk
+      if (fs.existsSync(htmlPath) && fs.statSync(htmlPath).isFile()) {
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        return res.sendFile(htmlPath);
       }
     }
 
@@ -191,4 +298,3 @@ async function dynamicPdfViewer(req, res, next) {
 }
 
 module.exports = dynamicPdfViewer;
-
