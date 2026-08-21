@@ -27,31 +27,65 @@ try {
 }
 
 /**
- * Get Chrome executable path for Puppeteer on Windows
+ * Get Chrome / Chromium executable path for Puppeteer across Windows and Linux
  */
 function getChromeExecutablePath() {
   const possiblePaths = [
+    // Windows paths
     "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
     "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
     `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`,
     `${process.env.USERPROFILE}\\.cache\\puppeteer\\chrome\\win64-151.0.7922.71\\chrome-win64\\chrome.exe`,
-  ];
+    // Linux / Hostinger / CloudLinux / Ubuntu paths
+    "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    "/snap/bin/chromium",
+    "/usr/local/bin/chrome",
+    "/usr/local/bin/chromium",
+    process.env.CHROME_BIN,
+    process.env.PUPPETEER_EXECUTABLE_PATH,
+  ].filter(Boolean);
+
   for (const p of possiblePaths) {
     if (fs.existsSync(p)) return p;
   }
+  try {
+    if (puppeteer && typeof puppeteer.executablePath === "function") {
+      const pPath = puppeteer.executablePath();
+      if (fs.existsSync(pPath)) return pPath;
+    }
+  } catch {}
   return null;
 }
 
 /**
- * Render HTML content to a PDF file using Puppeteer
- * Falls back to saving raw HTML if Puppeteer is unavailable
+ * Render HTML content to a PDF file using Puppeteer with HTML fallback
  */
 async function renderHtmlToPdf(htmlContent, fullPath) {
+  // Always ensure destination directory exists
+  const dir = path.dirname(fullPath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  // Always write HTML copy so document is never lost
+  const htmlPath = fullPath.replace(/\.pdf$/, ".html");
+  fs.writeFileSync(htmlPath, htmlContent);
+
   if (puppeteer) {
     try {
       const launchOptions = {
         headless: "new",
-        args: ["--no-sandbox", "--disable-setuid-sandbox"],
+        args: [
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-gpu",
+          "--single-process",
+          "--no-zygote",
+        ],
       };
       const chromePath = getChromeExecutablePath();
       if (chromePath) {
@@ -64,11 +98,9 @@ async function renderHtmlToPdf(htmlContent, fullPath) {
       await browser.close();
       return true;
     } catch (err) {
-      console.error("Puppeteer PDF render error, using fallback:", err);
+      console.warn("Puppeteer PDF render error (HTML fallback saved):", err.message);
     }
   }
-  /* Fallback: save as HTML if Puppeteer is not available */
-  fs.writeFileSync(fullPath.replace(/\.pdf$/, ".html"), htmlContent);
   return false;
 }
 

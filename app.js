@@ -101,8 +101,25 @@ app.use(express.json({ limit: "10mb" })); // 10mb limit to handle base64 signatu
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Serve static uploaded files (PDFs, signatures, documents)
-app.use("/uploads", express.static(path.join(__dirname, "public/uploads")));
-app.use("/api/uploads", express.static(path.join(__dirname, "public/uploads")));
+const uploadsStaticDir = path.join(__dirname, "public/uploads");
+app.use("/uploads", express.static(uploadsStaticDir));
+app.use("/api/uploads", express.static(uploadsStaticDir));
+
+// Smart PDF fallback middleware: if a .pdf is requested and not on disk, serve the generated .html
+const handlePdfFallback = (req, res, next) => {
+  if (req.path && req.path.endsWith(".pdf")) {
+    const rawPath = req.path.replace(/^\//, "");
+    const htmlPath = path.join(uploadsStaticDir, rawPath.replace(/\.pdf$/, ".html"));
+    if (fs.existsSync(htmlPath)) {
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.sendFile(htmlPath);
+    }
+  }
+  next();
+};
+
+app.use("/uploads", handlePdfFallback);
+app.use("/api/uploads", handlePdfFallback);
 
 // ============================
 // Routes
