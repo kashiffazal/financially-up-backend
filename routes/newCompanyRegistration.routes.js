@@ -57,6 +57,21 @@ router.put(
   upload.fields([{ name: "staffSignature", maxCount: 1 }]),
   submitAdminDecision
 );
+router.post(
+  "/:id/decision",
+  upload.fields([{ name: "staffSignature", maxCount: 1 }]),
+  submitAdminDecision
+);
+router.put(
+  "/:id/admin-decision",
+  upload.fields([{ name: "staffSignature", maxCount: 1 }]),
+  submitAdminDecision
+);
+router.post(
+  "/:id/admin-decision",
+  upload.fields([{ name: "staffSignature", maxCount: 1 }]),
+  submitAdminDecision
+);
 
 /* Download/view generated PDF by type */
 router.get("/:id/pdf/:type", getPdf);

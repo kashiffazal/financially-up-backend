@@ -34,8 +34,25 @@ router.post(
 // Admin APIs (/admin/individual-engagement-new)
 router.get("/", getEngagements);
 router.get("/:id", getEngagementById);
+
+// Admin Decision Endpoint (Supports both PUT & POST, /decision & /admin-decision)
 router.put(
   "/:id/decision",
+  upload.fields([{ name: "staffUploadedSignature", maxCount: 1 }]),
+  submitAdminDecision
+);
+router.post(
+  "/:id/decision",
+  upload.fields([{ name: "staffUploadedSignature", maxCount: 1 }]),
+  submitAdminDecision
+);
+router.put(
+  "/:id/admin-decision",
+  upload.fields([{ name: "staffUploadedSignature", maxCount: 1 }]),
+  submitAdminDecision
+);
+router.post(
+  "/:id/admin-decision",
   upload.fields([{ name: "staffUploadedSignature", maxCount: 1 }]),
   submitAdminDecision
 );

@@ -25,7 +25,15 @@ const NewIndividualEngagement = sequelize.define("new_individual_engagements", {
     unique: true,
   },
   status: {
-    type: DataTypes.ENUM("Pending Review", "Accepted", "Conditional Accept", "Request Information", "Declined"),
+    type: DataTypes.ENUM(
+      "Pending Review",
+      "Accepted",
+      "Conditional Accept",
+      "Request Information",
+      "Enhanced Monitoring",
+      "Escalate",
+      "Declined"
+    ),
     allowNull: false,
     defaultValue: "Pending Review",
   },
