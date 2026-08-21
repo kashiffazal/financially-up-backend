@@ -264,7 +264,7 @@ const seedRBAC = async () => {
       }
     }
 
-    // 7. Seed Initial Administrator Account if no administrators exist
+    // 7. Seed or Migrate Initial Administrator Account
     const defaultAdminEmail = "admin@financiallyup.com.au";
     let adminUser = await User.findOne({ where: { email: defaultAdminEmail } });
 
@@ -287,6 +287,25 @@ const seedRBAC = async () => {
         });
         console.log(`--> Created initial Administrator account: ${defaultAdminEmail}`);
       }
+    } else if (adminUser.passwordHash && adminUser.passwordHash.startsWith("$argon2")) {
+      // Auto-migrate legacy Argon2 hash to Bcrypt
+      const passwordHash = await hashPassword("123456");
+      await adminUser.update({ passwordHash });
+      console.log(`--> Auto-migrated ${defaultAdminEmail} password hash from Argon2 to Bcrypt (password: 123456).`);
+    }
+
+    // 8. Auto-migrate any other existing users with legacy Argon2 password hashes to Bcrypt
+    try {
+      const usersWithArgon = await User.findAll();
+      for (const u of usersWithArgon) {
+        if (u.passwordHash && u.passwordHash.startsWith("$argon2")) {
+          const newHash = await hashPassword("123456");
+          await u.update({ passwordHash: newHash });
+          console.log(`--> Auto-migrated user ${u.email} password hash from Argon2 to Bcrypt.`);
+        }
+      }
+    } catch (migErr) {
+      console.warn("User password migration warning:", migErr.message);
     }
 
     // Ensure admin user is linked to the Administrator role

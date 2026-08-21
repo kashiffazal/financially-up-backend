@@ -17,7 +17,9 @@ const cors = require("cors");
 const helmet = require("helmet");
 const cookieParser = require("cookie-parser");
 const path = require("path");
+const fs = require("fs");
 const errorHandler = require("./middleware/errorHandler");
+const dynamicPdfViewer = require("./middleware/dynamicPdfViewer");
 
 // Import Auth & RBAC Route files
 const authRoutes = require("./routes/auth.routes");
@@ -105,21 +107,9 @@ const uploadsStaticDir = path.join(__dirname, "public/uploads");
 app.use("/uploads", express.static(uploadsStaticDir));
 app.use("/api/uploads", express.static(uploadsStaticDir));
 
-// Smart PDF fallback middleware: if a .pdf is requested and not on disk, serve the generated .html
-const handlePdfFallback = (req, res, next) => {
-  if (req.path && req.path.endsWith(".pdf")) {
-    const rawPath = req.path.replace(/^\//, "");
-    const htmlPath = path.join(uploadsStaticDir, rawPath.replace(/\.pdf$/, ".html"));
-    if (fs.existsSync(htmlPath)) {
-      res.setHeader("Content-Type", "text/html; charset=utf-8");
-      return res.sendFile(htmlPath);
-    }
-  }
-  next();
-};
-
-app.use("/uploads", handlePdfFallback);
-app.use("/api/uploads", handlePdfFallback);
+// Dynamic on-demand PDF and document generation & serving middleware
+app.use("/uploads", dynamicPdfViewer);
+app.use("/api/uploads", dynamicPdfViewer);
 
 // ============================
 // Routes
