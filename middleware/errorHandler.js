@@ -33,16 +33,14 @@ const errorHandler = (err, req, res, next) => {
     });
   }
 
-  // Handle all other errors with a generic server error response
+  // Handle all other errors with a descriptive server error response
   const statusCode = err.statusCode || 500;
-  const message =
-    process.env.NODE_ENV === "production"
-      ? "Internal server error"
-      : err.message || "Something went wrong";
+  const message = err.message || "Internal server error";
 
   return res.status(statusCode).json({
     success: false,
     message,
+    error: err.message || undefined,
   });
 };
 
