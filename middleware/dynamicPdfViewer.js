@@ -1,16 +1,6 @@
-/**
- * Dynamic PDF & Document Viewer Middleware
- * ========================================
- * Ensures that all uploaded documents and generated PDFs (including historical
- * or on-demand documents) are served seamlessly:
- * 1. If file exists on disk -> serves it directly.
- * 2. If .pdf is requested and .html companion exists -> serves styled HTML.
- * 3. If neither exists on disk -> extracts reference number, fetches record from MySQL,
- *    renders the template on-the-fly, saves to disk, and serves immediately.
- */
-
 const fs = require("fs");
 const path = require("path");
+const { Op } = require("sequelize");
 
 const uploadsStaticDir = path.join(__dirname, "../public/uploads");
 
@@ -49,7 +39,7 @@ async function dynamicPdfViewer(req, res, next) {
     const cleanRelPath = reqPath.replace(/^\//, "");
     const diskPath = path.join(uploadsStaticDir, cleanRelPath);
 
-    // 1. If exact file exists on disk, let express.static serve it or send it
+    // 1. If exact file exists on disk, serve it immediately
     if (fs.existsSync(diskPath) && fs.statSync(diskPath).isFile()) {
       return res.sendFile(diskPath);
     }
@@ -66,23 +56,56 @@ async function dynamicPdfViewer(req, res, next) {
       loadDependencies();
       const filename = path.basename(reqPath);
 
-      // Match Individual Engagement reference: NENG-YYYY-XXXXX or ENG-YYYY-XXXXX
+      // Match Individual Engagement reference or filename
       const nengMatch = filename.match(/(NENG-\d{4}-\d+|ENG-\d+)/i);
-      if (nengMatch && models?.NewIndividualEngagement) {
-        const refNumber = nengMatch[1];
-        const engagement = await models.NewIndividualEngagement.findOne({
-          where: { referenceNumber: refNumber },
-          include: [
-            "client",
-            "services",
-            "identity",
-            "documents",
-            "consents",
-            "signatures",
-            "auditLogs",
-            "adminReview",
-          ],
-        });
+      const refNumber = nengMatch ? nengMatch[1] : null;
+
+      if (models?.NewIndividualEngagement) {
+        let engagement = null;
+        if (refNumber) {
+          engagement = await models.NewIndividualEngagement.findOne({
+            where: {
+              [Op.or]: [
+                { referenceNumber: refNumber },
+                { clientPdfPath: { [Op.like]: `%${filename}%` } },
+                { adminPdfPath: { [Op.like]: `%${filename}%` } },
+                { acceptancePdfPath: { [Op.like]: `%${filename}%` } },
+                { auditPdfPath: { [Op.like]: `%${filename}%` } },
+              ],
+            },
+            include: [
+              "client",
+              "services",
+              "identity",
+              "documents",
+              "consents",
+              "signatures",
+              "auditLogs",
+              "adminReview",
+            ],
+          });
+        }
+
+        // Also check by filename directly in NewIndividualPdf table
+        if (!engagement && models.NewIndividualPdf) {
+          const pdfRow = await models.NewIndividualPdf.findOne({
+            where: { fileName: filename },
+          });
+          if (pdfRow?.engagementId) {
+            engagement = await models.NewIndividualEngagement.findByPk(pdfRow.engagementId, {
+              include: [
+                "client",
+                "services",
+                "identity",
+                "documents",
+                "consents",
+                "signatures",
+                "auditLogs",
+                "adminReview",
+              ],
+            });
+          }
+        }
 
         if (engagement) {
           let renderedHtml = null;
@@ -107,23 +130,33 @@ async function dynamicPdfViewer(req, res, next) {
         }
       }
 
-      // Match Company Registration reference: CREG-YYYY-XXXXX
+      // Match Company Registration reference or filename
       const cregMatch = filename.match(/(CREG-\d{4}-\d+)/i);
-      if (cregMatch && models?.NewCompanyRegistration) {
-        const refNumber = cregMatch[1];
-        const registration = await models.NewCompanyRegistration.findOne({
-          where: { referenceNumber: refNumber },
-          include: [
-            "officeholders",
-            "shareholders",
-            "beneficialOwners",
-            "documents",
-            "consents",
-            "adminReview",
-            "pdfs",
-            "auditLogs",
-          ],
-        });
+      const cregRef = cregMatch ? cregMatch[1] : null;
+
+      if (models?.NewCompanyRegistration) {
+        let registration = null;
+        if (cregRef) {
+          registration = await models.NewCompanyRegistration.findOne({
+            where: {
+              [Op.or]: [
+                { referenceNumber: cregRef },
+                { clientPdfPath: { [Op.like]: `%${filename}%` } },
+                { adminPdfPath: { [Op.like]: `%${filename}%` } },
+              ],
+            },
+            include: [
+              "officeholders",
+              "shareholders",
+              "beneficialOwners",
+              "documents",
+              "consents",
+              "adminReview",
+              "pdfs",
+              "auditLogs",
+            ],
+          });
+        }
 
         if (registration) {
           let renderedHtml = null;
@@ -145,11 +178,19 @@ async function dynamicPdfViewer(req, res, next) {
       }
     }
 
-    return next();
+    return res.status(404).json({
+      success: false,
+      message: `File or document not found: ${path.basename(reqPath)}`,
+    });
   } catch (error) {
     console.error("Dynamic PDF viewer error:", error);
-    return next();
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load document.",
+      error: error.message,
+    });
   }
 }
 
 module.exports = dynamicPdfViewer;
+
