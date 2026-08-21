@@ -74,6 +74,15 @@ const initDatabase = async (retries = 3, delayMs = 3000) => {
       await sequelize.sync();
       console.log("✅ Database tables synced successfully.");
 
+      // Safe schema patches: ensure newly added columns exist in MySQL tables
+      try {
+        await sequelize.query("ALTER TABLE new_individual_consents ADD COLUMN documentType VARCHAR(50) NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE new_individual_consents ADD COLUMN version VARCHAR(20) NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE new_individual_consents ADD COLUMN openedAt DATETIME NULL").catch(() => {});
+      } catch (patchErr) {
+        console.warn("Schema patch notice:", patchErr.message);
+      }
+
       // Seed RBAC permissions, roles, and initial administrator
       const { seedRBAC } = require("./utils/rbacSeed");
       await seedRBAC();
