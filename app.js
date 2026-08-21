@@ -83,7 +83,6 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
 
 // Security headers (XSS protection, content-type sniffing prevention, etc.)
 app.use(
@@ -108,6 +107,25 @@ app.use("/api/uploads", express.static(path.join(__dirname, "public/uploads")));
 // ============================
 // Routes
 // ============================
+
+// Root health check endpoints
+app.get("/", (req, res) => {
+  res.json({
+    success: true,
+    message: "Financially Up Backend API is live and active.",
+    environment: process.env.NODE_ENV,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.get("/api", (req, res) => {
+  res.json({
+    success: true,
+    message: "Financially Up API root endpoint is live.",
+    environment: process.env.NODE_ENV,
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {

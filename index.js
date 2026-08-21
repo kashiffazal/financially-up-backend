@@ -42,50 +42,57 @@ const { sequelize } = require("./models");
 
 const PORT = process.env.PORT || 5000;
 
+// Start the Express server immediately so Hostinger/Reverse Proxy detects active listener
+const server = app.listen(PORT, () => {
+  console.log(`🚀 Server is running on port ${PORT}`);
+  console.log(`🌐 API URL: http://localhost:${PORT}/api`);
+  console.log(`💚 Health check: http://localhost:${PORT}/api/health`);
+  console.log(`📊 Environment: ${process.env.NODE_ENV || "development"}`);
+});
+
 /**
- * Start the server
- * - Authenticate the database connection
- * - Sync all models (create tables if they don't exist)
- * - Start Express listening on the configured port
+ * Initialize Database Asynchronously
+ * Authenticates connection, syncs Sequelize models, and seeds RBAC permissions.
  */
-const startServer = async () => {
-  try {
-    console.log("========== DATABASE ==========");
-    console.log({
-      DB_HOST: process.env.DB_HOST,
-      DB_PORT: process.env.DB_PORT,
-      DB_NAME: process.env.DB_NAME,
-      DB_USER: process.env.DB_USER,
-      DB_PASSWORD: process.env.DB_PASSWORD,
-    });
-    console.log("==============================");
+const initDatabase = async (retries = 3, delayMs = 3000) => {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      console.log(`⏳ [Attempt ${attempt}/${retries}] Connecting to MySQL database...`);
+      console.log("========== DATABASE CONFIG ==========");
+      console.log({
+        DB_HOST: process.env.DB_HOST,
+        DB_PORT: process.env.DB_PORT,
+        DB_NAME: process.env.DB_NAME,
+        DB_USER: process.env.DB_USER,
+        DB_PASSWORD: process.env.DB_PASSWORD ? "******" : "(empty)",
+      });
+      console.log("=====================================");
 
-    // Test database connection
-    await sequelize.authenticate();
-    console.log("✅ Database connection established successfully.");
+      await sequelize.authenticate();
+      console.log("✅ Database connection established successfully.");
 
-    // Sync all models with the database
-    // alter: true will update existing tables to match the model (add new columns, etc.)
-    // In production, you would use migrations instead of sync
-    await sequelize.sync();
-    console.log("✅ Database tables synced successfully.");
+      await sequelize.sync();
+      console.log("✅ Database tables synced successfully.");
 
-    // Seed RBAC permissions, roles, and initial administrator
-    const { seedRBAC } = require("./utils/rbacSeed");
-    await seedRBAC();
-
-    // Start the Express server
-    app.listen(PORT, () => {
-      console.log(`🚀 Server is running on port ${PORT}`);
-      console.log(`🌐 API URL: http://localhost:${PORT}/api`);
-      console.log(`💚 Health check: http://localhost:${PORT}/api/health`);
-      console.log(`📊 Environment: ${process.env.NODE_ENV}`);
-    });
-  } catch (error) {
-    console.error("❌ Failed to start server:", error.message);
-    process.exit(1); // Exit with error code
+      // Seed RBAC permissions, roles, and initial administrator
+      const { seedRBAC } = require("./utils/rbacSeed");
+      await seedRBAC();
+      console.log("✅ RBAC seeding completed.");
+      return;
+    } catch (error) {
+      console.error(`⚠️ Database connection attempt ${attempt} failed:`, error.message);
+      if (attempt < retries) {
+        console.log(`Retrying in ${delayMs / 1000}s...`);
+        await new Promise((res) => setTimeout(res, delayMs));
+      } else {
+        console.error("❌ All database connection attempts exhausted. Server remains listening.");
+      }
+    }
   }
 };
 
-// Boot the server
-startServer();
+// Run database initialization in background without crashing Express listener
+initDatabase();
+
+module.exports = server;
+
