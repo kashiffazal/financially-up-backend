@@ -54,19 +54,36 @@ const allowedOrigins = (process.env.CORS_ORIGINS || "http://localhost:3000")
   .split(",")
   .map((origin) => origin.trim());
 
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      if (!origin || origin.includes("localhost") || origin.includes("127.0.0.1") || allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (
+      !origin ||
+      origin.includes("localhost") ||
+      origin.includes("127.0.0.1") ||
+      allowedOrigins.includes(origin)
+    ) {
       return callback(null, true);
-    },
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-    credentials: true,
-  })
-);
+    }
+    return callback(null, true);
+  },
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Requested-With",
+    "x-requested-with",
+    "Accept",
+    "Origin",
+    "X-CSRF-Token",
+    "Cache-Control",
+  ],
+  exposedHeaders: ["Content-Disposition", "X-Total-Count"],
+  credentials: true,
+  optionsSuccessStatus: 200,
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 // Security headers (XSS protection, content-type sniffing prevention, etc.)
 app.use(
