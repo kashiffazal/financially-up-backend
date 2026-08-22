@@ -258,5 +258,6 @@ module.exports = {
   generateAdminReviewPDF,
   generateDirectorConsentPDFs,
   generateMemberConsentPDFs,
+  renderHtmlToPdf,
   savePdfRecord,
 };

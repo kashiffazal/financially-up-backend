@@ -40,5 +40,12 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-
-/public/uploads
+# uploads directory structure preservation
+/public/uploads/*
+!/public/uploads/.gitkeep
+!/public/uploads/pdf
+!/public/uploads/pdf/.gitkeep
+!/public/uploads/signatures
+!/public/uploads/signatures/.gitkeep
+!/public/uploads/documents
+!/public/uploads/documents/.gitkeep

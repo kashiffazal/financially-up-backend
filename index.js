@@ -36,6 +36,22 @@ if (fs.existsSync(envPath)) {
   );
 }
 
+// Ensure storage directories exist on server startup
+const ensureStorageDirs = () => {
+  const dirs = [
+    path.join(__dirname, "public/uploads"),
+    path.join(__dirname, "public/uploads/pdf"),
+    path.join(__dirname, "public/uploads/signatures"),
+    path.join(__dirname, "public/uploads/documents"),
+  ];
+  for (const d of dirs) {
+    if (!fs.existsSync(d)) {
+      fs.mkdirSync(d, { recursive: true });
+    }
+  }
+};
+ensureStorageDirs();
+
 // Import the configured Express app and Sequelize instance
 const app = require("./app");
 const { sequelize } = require("./models");

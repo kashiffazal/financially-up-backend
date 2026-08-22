@@ -104,8 +104,23 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Serve static uploaded files (PDFs, signatures, documents)
 const uploadsStaticDir = path.join(__dirname, "public/uploads");
-app.use("/uploads", express.static(uploadsStaticDir));
-app.use("/api/uploads", express.static(uploadsStaticDir));
+const staticOptions = {
+  dotfiles: "ignore",
+  etag: true,
+  index: false,
+  maxAge: "1d",
+  setHeaders: (res, filePath) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    if (filePath.endsWith(".pdf")) {
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", "inline");
+    }
+  },
+};
+
+app.use("/uploads", express.static(uploadsStaticDir, staticOptions));
+app.use("/api/uploads", express.static(uploadsStaticDir, staticOptions));
 
 // Dynamic on-demand PDF and document generation & serving middleware
 app.use("/uploads", dynamicPdfViewer);
