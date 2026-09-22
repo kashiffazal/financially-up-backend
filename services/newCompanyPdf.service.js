@@ -1,106 +1,124 @@
 /**
- * New Company PDF Service
- * =======================
+ * New Company PDF Service (PHP mPDF Powered)
+ * ==========================================
  * Generates and tracks the Company Registration PDF package:
  * 1. Client Application PDF (21-section master document)
  * 2. Admin Compliance Review PDF (internal-only)
  * 3. Director Consent PDFs (one per officeholder)
  * 4. Member Consent PDFs (one per shareholder)
  *
- * Uses Puppeteer for HTML-to-PDF rendering with Chrome headless.
+ * Utilizes the lightweight, reliable PHP mPDF backend service instead of Puppeteer/Chromium.
  */
 
 const fs = require("fs");
 const path = require("path");
-const { renderClientApplicationHtml } = require("../pdf/templates/company-registration/clientApplicationTemplate");
-const { renderAdminReviewHtml } = require("../pdf/templates/company-registration/adminReviewTemplate");
-const { renderDirectorConsentHtml } = require("../pdf/templates/company-registration/directorConsentTemplate");
-const { renderMemberConsentHtml } = require("../pdf/templates/company-registration/memberConsentTemplate");
 const NewCompanyPdf = require("../models/NewCompanyPdf");
 
-/* Lazy-load Puppeteer to avoid startup failures */
-let puppeteer = null;
-try {
-  puppeteer = require("puppeteer");
-} catch (e) {
-  console.warn("Puppeteer not loaded yet. Will load lazily when available.");
+/**
+ * Resolves the PHP mPDF service base URL from environment
+ */
+function getPhpPdfServerUrl() {
+  return (
+    process.env.PHP_PDF_SERVER_URL ||
+    "http://localhost/myProjects/nextjs/financially-up/financially-up-php-backend"
+  );
 }
 
 /**
- * Get Chrome / Chromium executable path for Puppeteer across Windows and Linux
+ * Calls PHP mPDF backend service to render and save a Company Registration PDF
+ * @param {string} type - 'ClientApplication' | 'AdminReview' | 'DirectorConsent' | 'MemberConsent'
+ * @param {object} data - Full registration record data
+ * @param {string} fullPath - Target physical file path
+ * @param {string} fileName - File name
+ * @param {string} relPath - Relative web path
+ * @param {object} extra - Optional extra parameters (e.g. officeholder, shareholder)
+ * @returns {Promise<boolean>}
  */
-function getChromeExecutablePath() {
-  const possiblePaths = [
-    // Windows paths
-    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-    `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`,
-    `${process.env.USERPROFILE}\\.cache\\puppeteer\\chrome\\win64-151.0.7922.71\\chrome-win64\\chrome.exe`,
-    // Linux / Hostinger / CloudLinux / Ubuntu paths
-    "/usr/bin/google-chrome",
-    "/usr/bin/google-chrome-stable",
-    "/usr/bin/chromium",
-    "/usr/bin/chromium-browser",
-    "/snap/bin/chromium",
-    "/usr/local/bin/chrome",
-    "/usr/local/bin/chromium",
-    process.env.CHROME_BIN,
-    process.env.PUPPETEER_EXECUTABLE_PATH,
-  ].filter(Boolean);
-
-  for (const p of possiblePaths) {
-    if (fs.existsSync(p)) return p;
-  }
-  try {
-    if (puppeteer && typeof puppeteer.executablePath === "function") {
-      const pPath = puppeteer.executablePath();
-      if (fs.existsSync(pPath)) return pPath;
-    }
-  } catch {}
-  return null;
-}
-
-/**
- * Render HTML content to a PDF file using Puppeteer with HTML fallback
- */
-async function renderHtmlToPdf(htmlContent, fullPath) {
-  // Always ensure destination directory exists
+async function renderCompanyPdfViaPhp(type, data, fullPath, fileName, relPath, extra = {}) {
+  // Ensure target directory exists
   const dir = path.dirname(fullPath);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
 
-  // Always write HTML copy so document is never lost
+  const phpServerUrl = getPhpPdfServerUrl();
+  const endpoint = `${phpServerUrl}/forms-pdf-generation/company-registration/generate.php`;
+
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type,
+        data,
+        savePath: fullPath,
+        fileName,
+        relPath,
+        ...extra,
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn(`PHP PDF server returned HTTP ${response.status} for ${type}`);
+    }
+
+    const result = await response.json();
+    if (result && result.success) {
+      // If PHP returned base64 and file was not written directly on local disk, write it now
+      if (result.pdfBase64 && !fs.existsSync(fullPath)) {
+        const buffer = Buffer.from(result.pdfBase64, "base64");
+        fs.writeFileSync(fullPath, buffer);
+      }
+      return true;
+    } else {
+      console.warn("PHP PDF generation error:", result?.error || "Unknown error");
+    }
+  } catch (err) {
+    console.error("Failed to connect to PHP PDF generation service:", err.message);
+  }
+
+  return false;
+}
+
+/**
+ * Render arbitrary HTML content to a PDF file using PHP mPDF service
+ */
+async function renderHtmlToPdf(htmlContent, fullPath, title = "Company Registration Document") {
+  const dir = path.dirname(fullPath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
   const htmlPath = fullPath.replace(/\.pdf$/, ".html");
   fs.writeFileSync(htmlPath, htmlContent);
 
-  if (puppeteer) {
-    try {
-      const launchOptions = {
-        headless: "new",
-        args: [
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-gpu",
-          "--single-process",
-          "--no-zygote",
-        ],
-      };
-      const chromePath = getChromeExecutablePath();
-      if (chromePath) {
-        launchOptions.executablePath = chromePath;
+  const phpServerUrl = getPhpPdfServerUrl();
+  const endpoint = `${phpServerUrl}/forms-pdf-generation/render-html.php`;
+
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        html: htmlContent,
+        title,
+        savePath: fullPath,
+        fileName: path.basename(fullPath),
+      }),
+    });
+
+    const result = await response.json();
+    if (result && result.success) {
+      if (result.pdfBase64 && !fs.existsSync(fullPath)) {
+        const buffer = Buffer.from(result.pdfBase64, "base64");
+        fs.writeFileSync(fullPath, buffer);
       }
-      const browser = await puppeteer.launch(launchOptions);
-      const page = await browser.newPage();
-      await page.setContent(htmlContent, { waitUntil: "networkidle0" });
-      await page.pdf({ path: fullPath, format: "A4", printBackground: true });
-      await browser.close();
       return true;
-    } catch (err) {
-      console.warn("Puppeteer PDF render error (HTML fallback saved):", err.message);
     }
+  } catch (err) {
+    console.error("PHP HTML-to-PDF service error:", err.message);
   }
+
   return false;
 }
 
@@ -121,7 +139,7 @@ async function savePdfRecord(registrationId, type, fileName, filePath, personNam
       fileName,
       filePath,
       version,
-      templateVersion: "v1.0.0",
+      templateVersion: "v2.0.0 (mPDF)",
       generatedBy,
       generatedAt: new Date(),
       emailSent: false,
@@ -162,8 +180,7 @@ async function generateClientApplicationPDF(data) {
   const fullPath = path.join(pdfDir, fileName);
   const relPath = `/uploads/pdf/${year}/${month}/${fileName}`;
 
-  const html = renderClientApplicationHtml(data);
-  await renderHtmlToPdf(html, fullPath);
+  await renderCompanyPdfViaPhp("ClientApplication", data, fullPath, fileName, relPath);
 
   if (data.id) {
     await savePdfRecord(data.id, "ClientApplication", fileName, relPath);
@@ -183,8 +200,7 @@ async function generateAdminReviewPDF(data) {
   const fullPath = path.join(pdfDir, fileName);
   const relPath = `/uploads/pdf/${year}/${month}/${fileName}`;
 
-  const html = renderAdminReviewHtml(data);
-  await renderHtmlToPdf(html, fullPath);
+  await renderCompanyPdfViaPhp("AdminReview", data, fullPath, fileName, relPath);
 
   if (data.id) {
     await savePdfRecord(data.id, "AdminReview", fileName, relPath);
@@ -210,8 +226,9 @@ async function generateDirectorConsentPDFs(registration, officeholders) {
     const fullPath = path.join(pdfDir, fileName);
     const relPath = `/uploads/pdf/${year}/${month}/${fileName}`;
 
-    const html = renderDirectorConsentHtml(oh, registration);
-    await renderHtmlToPdf(html, fullPath);
+    await renderCompanyPdfViaPhp("DirectorConsent", registration, fullPath, fileName, relPath, {
+      officeholder: oh,
+    });
 
     if (registration.id) {
       await savePdfRecord(registration.id, "DirectorConsent", fileName, relPath, oh.fullName);
@@ -240,8 +257,9 @@ async function generateMemberConsentPDFs(registration, shareholders) {
     const fullPath = path.join(pdfDir, fileName);
     const relPath = `/uploads/pdf/${year}/${month}/${fileName}`;
 
-    const html = renderMemberConsentHtml(sh, registration);
-    await renderHtmlToPdf(html, fullPath);
+    await renderCompanyPdfViaPhp("MemberConsent", registration, fullPath, fileName, relPath, {
+      shareholder: sh,
+    });
 
     if (registration.id) {
       await savePdfRecord(registration.id, "MemberConsent", fileName, relPath, sh.fullName);

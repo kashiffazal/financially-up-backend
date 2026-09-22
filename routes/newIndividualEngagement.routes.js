@@ -10,8 +10,8 @@ const router = express.Router();
 const {
   createEngagement,
   getEngagements,
-  getEngagementById,
   submitAdminDecision,
+  deleteEngagement,
 } = require("../controllers/newIndividualEngagement.controller");
 
 const upload = require("../middleware/upload");
@@ -33,7 +33,9 @@ router.post(
 
 // Admin APIs (/admin/individual-engagement-new)
 router.get("/", getEngagements);
-router.get("/:id", getEngagementById);
+
+// Admin Record Deletion
+router.delete("/:id", deleteEngagement);
 
 // Admin Decision Endpoint (Supports both PUT & POST, /decision & /admin-decision)
 router.put(

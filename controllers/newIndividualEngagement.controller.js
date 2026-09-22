@@ -4,8 +4,8 @@
  * Handles API endpoints for the New Individual Client Engagement Form:
  * 1. createEngagement (POST /api/new-individual-engagements)
  * 2. getEngagements (GET /api/new-individual-engagements)
- * 3. getEngagementById (GET /api/new-individual-engagements/:id)
- * 4. submitAdminDecision (PUT /api/admin/new-individual-engagements/:id/decision)
+ * 3. submitAdminDecision (PUT/POST /api/new-individual-engagements/:id/decision)
+ * 4. deleteEngagement (DELETE /api/new-individual-engagements/:id)
  */
 
 const {
@@ -312,6 +312,11 @@ async function createEngagement(req, res) {
                 { supportingIdPath: relPath },
                 { where: { engagementId: engagement.id }, transaction }
               );
+            } else if (fieldName === "selfie") {
+              await NewIndividualIdentity.update(
+                { selfiePath: relPath },
+                { where: { engagementId: engagement.id }, transaction }
+              );
             }
           }
         }
@@ -336,9 +341,13 @@ async function createEngagement(req, res) {
       const fullData = await NewIndividualEngagement.findByPk(engagement.id, {
         include: ["client", "services", "identity", "documents", "consents", "signatures", "auditLogs", "adminReview"],
       });
+      const plainData = fullData ? fullData.toJSON() : {};
+      plainData.incomeActivities = body.incomeActivities || [];
+      plainData.about = body.about || null;
+      plainData.software = body.software || null;
       
-      const clientPdfPath = await generateClientEngagementPDF(fullData);
-      const adminPdfPath = await generateAdminReviewPDF(fullData);
+      const clientPdfPath = await generateClientEngagementPDF(plainData);
+      const adminPdfPath = await generateAdminReviewPDF(plainData);
       
       // Update PDF Paths on engagement record
       await engagement.update({ clientPdfPath, adminPdfPath });
@@ -384,27 +393,6 @@ async function getEngagements(req, res) {
   } catch (error) {
     console.error("Error fetching engagements:", error);
     return res.status(500).json({ success: false, message: "Failed to fetch engagements." });
-  }
-}
-
-/**
- * Gets a single engagement by ID for Admin Review modal.
- */
-async function getEngagementById(req, res) {
-  try {
-    const { id } = req.params;
-    const engagement = await NewIndividualEngagement.findByPk(id, {
-      include: ["client", "services", "identity", "documents", "consents", "signatures", "auditLogs", "adminReview"],
-    });
-
-    if (!engagement) {
-      return res.status(404).json({ success: false, message: "Engagement not found." });
-    }
-
-    return res.status(200).json({ success: true, data: engagement });
-  } catch (error) {
-    console.error("Error fetching engagement details:", error);
-    return res.status(500).json({ success: false, message: "Failed to fetch engagement details." });
   }
 }
 
@@ -476,27 +464,29 @@ async function submitAdminDecision(req, res) {
     const fullData = await NewIndividualEngagement.findByPk(engagement.id, {
       include: ["client", "services", "identity", "documents", "consents", "signatures", "auditLogs", "adminReview"],
     });
+    const plainData = fullData ? fullData.toJSON() : {};
+    plainData.taxAgentName = staffName;
 
     let adminPdfPath = null;
     let acceptancePdfPath = null;
     let auditPdfPath = null;
 
     try {
-      adminPdfPath = await generateAdminReviewPDF(fullData);
+      adminPdfPath = await generateAdminReviewPDF(plainData);
     } catch (err) {
       console.error("Error regenerating Admin Review PDF:", err);
     }
 
     if (decision === "Accept" || decision === "Accepted" || decision === "Conditional Accept") {
       try {
-        acceptancePdfPath = await generateEngagementAcceptancePDF(fullData, staffName);
+        acceptancePdfPath = await generateEngagementAcceptancePDF(plainData, staffName);
       } catch (err) {
         console.error("Error generating Acceptance PDF:", err);
       }
     }
 
     try {
-      auditPdfPath = await generateAuditReportPDF(fullData, staffName);
+      auditPdfPath = await generateAuditReportPDF(plainData, staffName);
     } catch (err) {
       console.error("Error generating Audit Report PDF:", err);
     }
@@ -573,9 +563,45 @@ async function submitAdminDecision(req, res) {
   }
 }
 
+/**
+ * Deletes an engagement by ID (DELETE /api/new-individual-engagements/:id).
+ */
+async function deleteEngagement(req, res) {
+  try {
+    const { id } = req.params;
+    const engagement = await NewIndividualEngagement.findByPk(id);
+
+    if (!engagement) {
+      return res.status(404).json({ success: false, message: "Engagement not found." });
+    }
+
+    // Delete associated sub-records
+    try {
+      await NewIndividualIdentity.destroy({ where: { engagementId: id } });
+      await NewIndividualDocument.destroy({ where: { engagementId: id } });
+      await NewIndividualSignature.destroy({ where: { engagementId: id } });
+      await NewIndividualConsent.destroy({ where: { engagementId: id } });
+      await NewIndividualAdminReview.destroy({ where: { engagementId: id } });
+      await NewIndividualAuditLog.destroy({ where: { engagementId: id } });
+    } catch (cleanErr) {
+      console.warn("Sub-record clean error:", cleanErr);
+    }
+
+    await engagement.destroy();
+
+    return res.status(200).json({
+      success: true,
+      message: "Engagement record deleted successfully.",
+    });
+  } catch (error) {
+    console.error("Error deleting engagement:", error);
+    return res.status(500).json({ success: false, message: "Failed to delete engagement.", error: error.message });
+  }
+}
+
 module.exports = {
   createEngagement,
   getEngagements,
-  getEngagementById,
   submitAdminDecision,
+  deleteEngagement,
 };

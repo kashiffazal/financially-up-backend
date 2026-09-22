@@ -1,104 +1,129 @@
 /**
- * Individual PDF Service
- * ======================
- * Complete Part 20 PDF Generation Specification Implementation.
- * Generates and tracks 4 PDF types in `new_individual_pdfs`:
+ * Individual PDF Service (PHP mPDF Powered)
+ * =========================================
+ * Generates and tracks 4 Individual Engagement PDF types in `new_individual_pdfs`:
  * 1. Client Engagement PDF (Client copy on submission)
  * 2. Admin Review PDF (Internal staff package on submission)
  * 3. Engagement Acceptance PDF (Client official acceptance notice on Tax Agent approval)
  * 4. Audit Report PDF (Compliance audit log report on demand)
+ *
+ * Utilizes the lightweight, reliable PHP mPDF backend service instead of Puppeteer/Chromium.
  */
 
 const fs = require("fs");
 const path = require("path");
-const { renderClientEngagementHtml } = require("../pdf/templates/individual-engagement/clientEngagementTemplate");
-const { renderAdminReviewHtml } = require("../pdf/templates/individual-engagement/adminReviewTemplate");
-const { renderEngagementAcceptanceHtml } = require("../pdf/templates/individual-engagement/engagementAcceptanceTemplate");
-const { renderAuditReportHtml } = require("../pdf/templates/individual-engagement/auditReportTemplate");
 const NewIndividualPdf = require("../models/NewIndividualPdf");
 
-let puppeteer = null;
-try {
-  puppeteer = require("puppeteer");
-} catch (e) {
-  console.warn("Puppeteer not loaded yet. Will load lazily when available.");
+/**
+ * Resolves the PHP mPDF service base URL from environment
+ */
+function getPhpPdfServerUrl() {
+  return (
+    process.env.PHP_PDF_SERVER_URL ||
+    "http://localhost/myProjects/nextjs/financially-up/financially-up-php-backend"
+  );
 }
 
 /**
- * Gets Chrome / Chromium executable path for Puppeteer across Windows and Linux
+ * Calls PHP mPDF backend service to render and save an Individual Engagement PDF
+ * @param {string} type - 'ClientEngagement' | 'AdminReview' | 'EngagementAcceptance' | 'AuditReport'
+ * @param {object} data - Full engagement record data
+ * @param {string} fullPath - Target physical file path
+ * @param {string} fileName - File name
+ * @param {string} relPath - Relative web path
+ * @param {object} extra - Optional extra parameters (e.g. staffName, auditorName)
+ * @returns {Promise<boolean>}
  */
-function getChromeExecutablePath() {
-  const possiblePaths = [
-    // Windows paths
-    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-    `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`,
-    `${process.env.USERPROFILE}\\.cache\\puppeteer\\chrome\\win64-151.0.7922.71\\chrome-win64\\chrome.exe`,
-    // Linux / Hostinger / CloudLinux / Ubuntu paths
-    "/usr/bin/google-chrome",
-    "/usr/bin/google-chrome-stable",
-    "/usr/bin/chromium",
-    "/usr/bin/chromium-browser",
-    "/snap/bin/chromium",
-    "/usr/local/bin/chrome",
-    "/usr/local/bin/chromium",
-    process.env.CHROME_BIN,
-    process.env.PUPPETEER_EXECUTABLE_PATH,
-  ].filter(Boolean);
-
-  for (const p of possiblePaths) {
-    if (fs.existsSync(p)) return p;
-  }
-  try {
-    if (puppeteer && typeof puppeteer.executablePath === "function") {
-      const pPath = puppeteer.executablePath();
-      if (fs.existsSync(pPath)) return pPath;
-    }
-  } catch {}
-  return null;
-}
-
-/**
- * Generates PDF file from HTML string using Puppeteer with HTML fallback
- */
-async function renderHtmlToPdf(htmlContent, fullPath) {
-  // Always ensure destination directory exists
+async function renderIndividualPdfViaPhp(type, data, fullPath, fileName, relPath, extra = {}) {
+  // Ensure target directory exists
   const dir = path.dirname(fullPath);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
 
-  // Always write HTML copy so document is never lost
+  const phpServerUrl = getPhpPdfServerUrl();
+  const endpoint = `${phpServerUrl}/forms-pdf-generation/individual-engagement/generate.php`;
+
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type,
+        data,
+        savePath: fullPath,
+        fileName,
+        relPath,
+        ...extra,
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn(`PHP PDF server returned HTTP ${response.status} for ${type}`);
+    }
+
+    const result = await response.json();
+    if (result && result.success) {
+      // If PHP returned base64 and file was not written directly on local disk, write it now
+      if (result.pdfBase64 && !fs.existsSync(fullPath)) {
+        const buffer = Buffer.from(result.pdfBase64, "base64");
+        fs.writeFileSync(fullPath, buffer);
+      }
+      return true;
+    } else {
+      console.warn("PHP PDF generation error:", result?.error || "Unknown error");
+    }
+  } catch (err) {
+    console.error("Failed to connect to PHP PDF generation service:", err.message);
+  }
+
+  return false;
+}
+
+/**
+ * Generates PDF file from arbitrary HTML string using PHP mPDF service
+ * @param {string} htmlContent
+ * @param {string} fullPath
+ * @param {string} title
+ * @returns {Promise<boolean>}
+ */
+async function renderHtmlToPdf(htmlContent, fullPath, title = "Financially Up Document") {
+  const dir = path.dirname(fullPath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  // Save HTML copy for archive
   const htmlPath = fullPath.replace(/\.pdf$/, ".html");
   fs.writeFileSync(htmlPath, htmlContent);
 
-  if (puppeteer) {
-    try {
-      const launchOptions = {
-        headless: "new",
-        args: [
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-gpu",
-          "--single-process",
-          "--no-zygote",
-        ],
-      };
-      const chromePath = getChromeExecutablePath();
-      if (chromePath) {
-        launchOptions.executablePath = chromePath;
+  const phpServerUrl = getPhpPdfServerUrl();
+  const endpoint = `${phpServerUrl}/forms-pdf-generation/render-html.php`;
+
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        html: htmlContent,
+        title,
+        savePath: fullPath,
+        fileName: path.basename(fullPath),
+      }),
+    });
+
+    const result = await response.json();
+    if (result && result.success) {
+      if (result.pdfBase64 && !fs.existsSync(fullPath)) {
+        const buffer = Buffer.from(result.pdfBase64, "base64");
+        fs.writeFileSync(fullPath, buffer);
       }
-      const browser = await puppeteer.launch(launchOptions);
-      const page = await browser.newPage();
-      await page.setContent(htmlContent, { waitUntil: "networkidle0" });
-      await page.pdf({ path: fullPath, format: "A4", printBackground: true });
-      await browser.close();
       return true;
-    } catch (err) {
-      console.warn("Puppeteer PDF render error (HTML fallback saved):", err.message);
     }
+  } catch (err) {
+    console.error("PHP HTML-to-PDF service error:", err.message);
   }
+
   return false;
 }
 
@@ -118,7 +143,7 @@ async function savePdfRecord(engagementId, type, fileName, filePath, generatedBy
       fileName,
       filePath,
       version,
-      templateVersion: "v1.0.0",
+      templateVersion: "v2.0.0 (mPDF)",
       generatedBy,
       generatedAt: new Date(),
       emailSent: false,
@@ -145,8 +170,7 @@ async function generateClientEngagementPDF(data) {
   const fullPath = path.join(pdfDir, fileName);
   const relPath = `/uploads/pdf/${year}/${month}/${fileName}`;
 
-  const html = renderClientEngagementHtml(data);
-  await renderHtmlToPdf(html, fullPath);
+  await renderIndividualPdfViaPhp("ClientEngagement", data, fullPath, fileName, relPath);
 
   if (data.id) {
     await savePdfRecord(data.id, "ClientEngagement", fileName, relPath, "System");
@@ -171,8 +195,7 @@ async function generateAdminReviewPDF(data) {
   const fullPath = path.join(pdfDir, fileName);
   const relPath = `/uploads/pdf/${year}/${month}/${fileName}`;
 
-  const html = renderAdminReviewHtml(data);
-  await renderHtmlToPdf(html, fullPath);
+  await renderIndividualPdfViaPhp("AdminReview", data, fullPath, fileName, relPath);
 
   if (data.id) {
     await savePdfRecord(data.id, "AdminReview", fileName, relPath, "System");
@@ -197,8 +220,9 @@ async function generateEngagementAcceptancePDF(data, taxAgentName = "Financially
   const fullPath = path.join(pdfDir, fileName);
   const relPath = `/uploads/pdf/${year}/${month}/${fileName}`;
 
-  const html = renderEngagementAcceptanceHtml(data);
-  await renderHtmlToPdf(html, fullPath);
+  await renderIndividualPdfViaPhp("EngagementAcceptance", data, fullPath, fileName, relPath, {
+    staffName: taxAgentName,
+  });
 
   if (data.id) {
     await savePdfRecord(data.id, "EngagementAcceptance", fileName, relPath, taxAgentName);
@@ -223,8 +247,9 @@ async function generateAuditReportPDF(data, auditorName = "Compliance Auditor") 
   const fullPath = path.join(pdfDir, fileName);
   const relPath = `/uploads/pdf/${year}/${month}/${fileName}`;
 
-  const html = renderAuditReportHtml(data);
-  await renderHtmlToPdf(html, fullPath);
+  await renderIndividualPdfViaPhp("AuditReport", data, fullPath, fileName, relPath, {
+    auditorName,
+  });
 
   if (data.id) {
     await savePdfRecord(data.id, "AuditReport", fileName, relPath, auditorName);
