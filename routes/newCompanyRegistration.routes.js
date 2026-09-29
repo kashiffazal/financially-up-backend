@@ -20,25 +20,33 @@ const {
 
 const upload = require("../middleware/upload");
 
+const MAX_REGISTRATION_FILES = 60;
+
+/*
+ * The 12-step form posts files under many field names, including indexed ones
+ * (officer_0_idAttachment, member_1_corporateExtract), so accept any field name
+ * and regroup req.files into { fieldName: [files] } for the controller.
+ * File type and size limits still apply via the shared upload middleware.
+ */
+const groupFilesByField = (req, res, next) => {
+  const fileList = Array.isArray(req.files) ? req.files : [];
+  if (fileList.length > MAX_REGISTRATION_FILES) {
+    return res.status(400).json({
+      success: false,
+      message: `Too many files attached. Maximum is ${MAX_REGISTRATION_FILES}.`,
+    });
+  }
+  req.files = fileList.reduce((grouped, file) => {
+    (grouped[file.fieldname] = grouped[file.fieldname] || []).push(file);
+    return grouped;
+  }, {});
+  next();
+};
+
 /* ─── Public Client API ─── */
 
 /* Submit complete 12-step company registration form with file uploads */
-router.post(
-  "/",
-  upload.fields([
-    { name: "idDocument", maxCount: 5 },
-    { name: "photoId", maxCount: 5 },
-    { name: "occupierConsent", maxCount: 1 },
-    { name: "asicExtract", maxCount: 5 },
-    { name: "trustDeed", maxCount: 5 },
-    { name: "structureChart", maxCount: 1 },
-    { name: "sourceOfWealthEvidence", maxCount: 5 },
-    { name: "nomineeAgreement", maxCount: 5 },
-    { name: "authorityDocument", maxCount: 1 },
-    { name: "signatureFile", maxCount: 5 },
-  ]),
-  createRegistration
-);
+router.post("/", upload.any(), groupFilesByField, createRegistration);
 
 /* ─── Admin APIs ─── */
 

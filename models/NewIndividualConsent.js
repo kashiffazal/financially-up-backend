@@ -38,12 +38,12 @@ const NewIndividualConsent = sequelize.define("new_individual_consents", {
   accepted: {
     type: DataTypes.BOOLEAN,
     allowNull: false,
-    defaultValue: true,
+    defaultValue: false,
   },
+  // Null when the client declined: there is no acceptance moment to record.
   acceptedAt: {
     type: DataTypes.DATE,
-    allowNull: false,
-    defaultValue: DataTypes.NOW,
+    allowNull: true,
   },
 });
 

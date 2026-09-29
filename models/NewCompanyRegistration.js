@@ -127,6 +127,9 @@ const NewCompanyRegistration = sequelize.define("new_company_registrations", {
   governanceDocument: { type: DataTypes.STRING(255), allowNull: true },
   specialInstructions: { type: DataTypes.TEXT, allowNull: true },
 
+  /* ─── Step 6: Control Questions (controlQ1..controlQ6 answers) ─── */
+  controlAnswers: { type: DataTypes.JSON, allowNull: true },
+
   /* ─── Step 3: Addresses & Address Service ─── */
   regOfficeHouseNumber: { type: DataTypes.STRING(50), allowNull: true },
   regOfficeStreet: { type: DataTypes.STRING(255), allowNull: true },

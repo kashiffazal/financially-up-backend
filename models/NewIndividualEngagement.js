@@ -57,6 +57,25 @@ const NewIndividualEngagement = sequelize.define("new_individual_engagements", {
     type: DataTypes.STRING(255),
     allowNull: true,
   },
+  // Step 2: TFN disclosure status and explanation when not provided
+  tfnStatus: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+  },
+  tfnExplanation: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+  // Step 4: selected income activity tags (JSON array)
+  incomeActivities: {
+    type: DataTypes.JSON,
+    allowNull: true,
+  },
+  // Step 5: BAS scope selection
+  basScope: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+  },
   address: {
     type: DataTypes.TEXT,
     allowNull: true,

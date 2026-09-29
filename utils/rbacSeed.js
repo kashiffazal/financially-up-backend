@@ -33,6 +33,10 @@ const SYSTEM_PERMISSIONS = [
   { module: "audit", resource: "log", action: "view", slug: "audit.view", name: "View Audit Logs", description: "View immutable system-wide audit records" },
   { module: "audit", resource: "log", action: "export", slug: "audit.export", name: "Export Audit Logs", description: "Export audit records to CSV/Excel" },
 
+  // Global Settings (company identity, contact emails, application URLs)
+  { module: "settings", resource: "setting", action: "view", slug: "settings.view", name: "View Global Settings", description: "View global company variables and application settings" },
+  { module: "settings", resource: "setting", action: "update", slug: "settings.update", name: "Update Global Settings", description: "Edit global company variables and application settings" },
+
   // GST Registration Module
   { module: "gst", resource: "registration", action: "view", slug: "gst.registration.view", name: "View GST Registrations", description: "View GST registration applications" },
   { module: "gst", resource: "registration", action: "create", slug: "gst.registration.create", name: "Create GST Registration", description: "Submit GST registration applications" },

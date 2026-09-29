@@ -95,6 +95,30 @@ const initDatabase = async (retries = 3, delayMs = 3000) => {
         await sequelize.query("ALTER TABLE new_individual_consents ADD COLUMN documentType VARCHAR(50) NULL").catch(() => {});
         await sequelize.query("ALTER TABLE new_individual_consents ADD COLUMN version VARCHAR(20) NULL").catch(() => {});
         await sequelize.query("ALTER TABLE new_individual_consents ADD COLUMN openedAt DATETIME NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE new_company_registrations ADD COLUMN controlAnswers JSON NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE new_individual_engagements ADD COLUMN tfnStatus VARCHAR(50) NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE new_individual_engagements ADD COLUMN tfnExplanation TEXT NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE new_individual_engagements ADD COLUMN incomeActivities JSON NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE new_individual_engagements ADD COLUMN basScope VARCHAR(100) NULL").catch(() => {});
+        // Declined consents are recorded with a NULL acceptedAt
+        await sequelize.query("ALTER TABLE new_individual_consents MODIFY COLUMN acceptedAt DATETIME NULL").catch(() => {});
+
+        // First/last name captured separately (fullName stays as the composed value)
+        await sequelize.query("ALTER TABLE new_individual_clients ADD COLUMN firstName VARCHAR(100) NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE new_individual_clients ADD COLUMN lastName VARCHAR(100) NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE new_company_officeholders ADD COLUMN firstName VARCHAR(100) NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE new_company_officeholders ADD COLUMN lastName VARCHAR(100) NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE new_company_shareholders ADD COLUMN firstName VARCHAR(100) NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE new_company_shareholders ADD COLUMN lastName VARCHAR(100) NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE new_company_beneficial_owners ADD COLUMN firstName VARCHAR(100) NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE new_company_beneficial_owners ADD COLUMN lastName VARCHAR(100) NULL").catch(() => {});
+
+        // Front/back identity document images
+        await sequelize.query("ALTER TABLE new_individual_identities ADD COLUMN primaryIdType VARCHAR(60) NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE new_individual_identities ADD COLUMN primaryIdBackPath TEXT NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE new_individual_identities ADD COLUMN supportingIdType VARCHAR(60) NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE new_individual_identities ADD COLUMN supportingIdBackPath TEXT NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE new_company_officeholders ADD COLUMN idDocBackFilePath TEXT NULL").catch(() => {});
       } catch (patchErr) {
         console.warn("Schema patch notice:", patchErr.message);
       }
@@ -103,6 +127,11 @@ const initDatabase = async (retries = 3, delayMs = 3000) => {
       const { seedRBAC } = require("./utils/rbacSeed");
       await seedRBAC();
       console.log("✅ RBAC seeding completed.");
+
+      // Seed global settings (company identity, contact emails, app URLs)
+      const { seedSettings } = require("./utils/settingsSeed");
+      await seedSettings();
+      console.log("✅ Global settings seeding completed.");
       return;
     } catch (error) {
       console.error(`⚠️ Database connection attempt ${attempt} failed:`, error.message);

@@ -31,6 +31,26 @@ const {
 const { sendClientSubmissionEmail, sendAdminDecisionEmail } = require("../services/individualEmail.service");
 const path = require("path");
 
+/** Parses a field that may arrive as a JSON string (multipart) or an array */
+function parseJsonField(value) {
+  if (Array.isArray(value) || (value && typeof value === "object")) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) || typeof parsed === "object" ? parsed : [value];
+    } catch (e) {
+      return value.split(",").map((item) => item.trim()).filter(Boolean);
+    }
+  }
+  return null;
+}
+
+/** Normalises checkbox/boolean payload values ("true", true, 1, ["accepted"]) */
+function isChecked(value) {
+  if (Array.isArray(value)) return value.length > 0;
+  return value === true || value === "true" || value === 1 || value === "1" || value === "Yes" || value === "accepted";
+}
+
 function calculateAutomatedRiskLevel(body) {
   let score = 0;
   if (body.atoIssues === "Yes") score += 3;
@@ -60,21 +80,42 @@ async function createEngagement(req, res) {
     const referenceNumber = `NENG-${new Date().getFullYear()}-${refSuffix}`;
 
     // 1. Create or Find Client
-    const [client] = await NewIndividualClient.findOrCreate({
+    // The form captures first and last name separately; fullName is kept as the
+    // composed value used by admin lists, exports and PDFs.
+    const firstName = (body.firstName || "").trim();
+    const lastName = (body.lastName || "").trim();
+    const composedName = [firstName, lastName].filter(Boolean).join(" ");
+
+    const clientDetails = {
+      firstName: firstName || null,
+      lastName: lastName || null,
+      fullName: composedName || body.fullName || body.name || "Client",
+      mobile: body.mobile || body.phone || "",
+      dateOfBirth: body.dateOfBirth || null,
+      birthCountry: body.birthCountry || null,
+      birthCity: body.birthCity || null,
+      occupation: body.occupation || null,
+      employmentStatus: body.employmentStatus || null,
+      about: body.about || null,
+      tfn: body.tfn || null,
+      maskedTfn: body.tfn ? `*** *** ${String(body.tfn).replace(/\s/g, "").slice(-3)}` : null,
+    };
+
+    const [client, clientCreated] = await NewIndividualClient.findOrCreate({
       where: { email: body.email || "client@example.com" },
-      defaults: {
-        fullName: body.fullName || body.name || "Client",
-        mobile: body.mobile || body.phone || "",
-        dateOfBirth: body.dateOfBirth || null,
-        birthCountry: body.birthCountry || null,
-        birthCity: body.birthCity || null,
-        occupation: body.occupation || null,
-        employmentStatus: body.employmentStatus || null,
-        tfn: body.tfn || null,
-        maskedTfn: body.tfn ? `*** *** ${String(body.tfn).replace(/\s/g, "").slice(-3)}` : null,
-      },
+      defaults: clientDetails,
       transaction,
     });
+
+    // Returning clients: refresh details supplied in this submission so the
+    // record does not stay frozen at whatever was entered the first time.
+    if (!clientCreated) {
+      const refreshed = Object.entries(clientDetails).reduce((changes, [key, value]) => {
+        if (value !== null && value !== "") changes[key] = value;
+        return changes;
+      }, {});
+      await client.update(refreshed, { transaction });
+    }
 
     // 2. Create Master Engagement Record
     const engagement = await NewIndividualEngagement.create(
@@ -87,6 +128,10 @@ async function createEngagement(req, res) {
         taxResidency: body.taxResidency || "Australian Tax Resident",
         hasPreviousName: body.hasPreviousName || "No",
         previousNames: body.previousNames || null,
+        tfnStatus: body.tfnStatus || null,
+        tfnExplanation: body.tfnExplanation || null,
+        incomeActivities: parseJsonField(body.incomeActivities),
+        basScope: body.basScope || null,
         address: body.address || body.residentialAddress || null,
         postalAddress: body.postalAddress || null,
         citizenshipCountry: body.citizenshipCountry || null,
@@ -148,7 +193,7 @@ async function createEngagement(req, res) {
         accountName: body.accountName || null,
         bsb: body.bsb || null,
         accountNumber: body.accountNumber || null,
-        confirmOwnership: body.confirmOwnership || true,
+        confirmOwnership: isChecked(body.confirmOwnership),
         riskLevel: calculateAutomatedRiskLevel(body),
         submittedAt: new Date(),
       },
@@ -176,9 +221,13 @@ async function createEngagement(req, res) {
       {
         engagementId: engagement.id,
         identityMethod: body.identityMethod || "Upload ID",
+        primaryIdType: body.primaryIdType || null,
+        supportingIdType: body.supportingIdType || null,
         noPhotoIdReason: body.noPhotoIdReason || null,
-        biometricConsent: body.biometricConsent || true,
-        dvsStatus: "Pass",
+        biometricConsent: isChecked(body.biometricConsent),
+        // No DVS integration exists yet, so identity stays unverified until an
+        // officer checks it manually. Never assert an electronic "Pass" here.
+        dvsStatus: "Pending",
       },
       { transaction }
     );
@@ -212,9 +261,10 @@ async function createEngagement(req, res) {
 
     // 6. Consents with Audit Tracking (documentType, version, openedAt, acceptedAt)
     const consentEntries = [
+      /* Step 9: statutory terms, notices and declarations */
       {
         consentType: "ScheduleTerms",
-        accepted: body.consentScheduleTerms === true || body.consentScheduleTerms === "true" || body.consentScheduleTerms === 1,
+        accepted: isChecked(body.consentScheduleTerms),
         documentType: body.termsDocumentType || "TERMS",
         version: body.termsVersion || "2.1",
         openedAt: body.termsOpenedAt ? new Date(body.termsOpenedAt) : null,
@@ -222,65 +272,71 @@ async function createEngagement(req, res) {
       },
       {
         consentType: "PrivacyNotice",
-        accepted: body.consentPrivacy === true || body.consentPrivacy === "true" || body.consentPrivacy === 1,
+        accepted: isChecked(body.consentPrivacy),
         documentType: body.privacyDocumentType || "PRIVACY",
         version: body.privacyVersion || "2.1",
         openedAt: body.privacyOpenedAt ? new Date(body.privacyOpenedAt) : null,
         acceptedAt: body.privacyAcceptedAt ? new Date(body.privacyAcceptedAt) : new Date(),
       },
-      {
-        consentType: "AtoAuthority",
-        accepted: body.consentAtoAuthority === true || body.consentAtoAuthority === "true" || body.consentAtoAuthority === 1,
-        documentType: "ATO_AUTHORITY",
-        version: "1.0",
-        openedAt: null,
-        acceptedAt: new Date(),
-      },
-      {
-        consentType: "CloudProcessing",
-        accepted: body.consentCloudOverseas === "Yes",
-        documentType: "CLOUD_PROCESSING",
-        version: "1.0",
-        openedAt: null,
-        acceptedAt: new Date(),
-      },
-      {
-        consentType: "BiometricConsent",
-        accepted: body.consentBiometric === true || body.consentBiometric === "true" || body.consentBiometric === 1,
-        documentType: "BIOMETRIC",
-        version: "1.0",
-        openedAt: null,
-        acceptedAt: new Date(),
-      },
+      { consentType: "AtoAuditDeclaration", accepted: isChecked(body.consentAtoAuditDeclaration), documentType: "ATO_AUDIT_DECLARATION", version: "1.0" },
+      { consentType: "TrueAndCorrect", accepted: isChecked(body.declarationTrueAndCorrect), documentType: "DECLARATION", version: "1.0" },
+      { consentType: "WorldwideIncome", accepted: isChecked(body.declarationWorldwideIncome), documentType: "DECLARATION", version: "1.0" },
+      { consentType: "PendingReview", accepted: isChecked(body.declarationPendingReview), documentType: "DECLARATION", version: "1.0" },
+      { consentType: "BiometricConsent", accepted: isChecked(body.consentBiometric), documentType: "BIOMETRIC", version: "1.0" },
+      { consentType: "RecordingConsent", accepted: isChecked(body.consentRecording), documentType: "RECORDING", version: "1.0" },
+      { consentType: "TechnologyOverseasProcessing", accepted: isChecked(body.techBlendedTeam), documentType: "CLOUD_PROCESSING", version: "1.0" },
+
+      /* Step 7: statutory authorities */
+      { consentType: "AtoAuthority", accepted: isChecked(body.atoAuthority), documentType: "ATO_AUTHORITY", version: "1.0" },
+      { consentType: "AbrAuthority", accepted: isChecked(body.abrAuthority), documentType: "ABR_AUTHORITY", version: "1.0" },
+      { consentType: "PreviousAgentAuthority", accepted: isChecked(body.previousAuthority), documentType: "PREVIOUS_AGENT_AUTHORITY", version: "1.0" },
+      { consentType: "BankAccountOwnership", accepted: isChecked(body.confirmOwnership), documentType: "BANK_OWNERSHIP", version: "1.0" },
     ];
 
+    // Every answer is recorded, including declines, so the PDFs and the audit
+    // trail show what the client actually agreed to rather than assuming consent.
     for (const entry of consentEntries) {
-      if (entry.accepted) {
-        await NewIndividualConsent.create(
-          {
-            engagementId: engagement.id,
-            consentType: entry.consentType,
-            documentType: entry.documentType,
-            version: entry.version,
-            openedAt: entry.openedAt,
-            accepted: true,
-            acceptedAt: entry.acceptedAt,
-          },
-          { transaction }
-        );
-      }
+      await NewIndividualConsent.create(
+        {
+          engagementId: engagement.id,
+          consentType: entry.consentType,
+          documentType: entry.documentType,
+          version: entry.version,
+          openedAt: entry.openedAt || null,
+          accepted: entry.accepted,
+          acceptedAt: entry.accepted ? entry.acceptedAt || new Date() : null,
+        },
+        { transaction }
+      );
     }
 
     // 6b. Process Multer Uploaded Documents (Multer)
     if (req.files) {
+      // Identity documents are captured front and back. The legacy single-file
+      // names are still accepted and treated as the front image.
       const docCategories = {
-        primaryId: "PrimaryID",
-        supportingId: "SupportingID",
+        primaryId: "PrimaryID (Front)",
+        primaryIdFront: "PrimaryID (Front)",
+        primaryIdBack: "PrimaryID (Back)",
+        supportingId: "SupportingID (Front)",
+        supportingIdFront: "SupportingID (Front)",
+        supportingIdBack: "SupportingID (Back)",
         selfie: "SelfieID",
         visaEvidence: "VisaEvidence",
         atoDocuments: "ATONotice",
         authorityDoc: "AuthorityDocument",
         signatureUploadedFile: "Signature",
+      };
+
+      // Upload field -> identity column holding that image
+      const identityPathFields = {
+        primaryId: "primaryIdPath",
+        primaryIdFront: "primaryIdPath",
+        primaryIdBack: "primaryIdBackPath",
+        supportingId: "supportingIdPath",
+        supportingIdFront: "supportingIdPath",
+        supportingIdBack: "supportingIdBackPath",
+        selfie: "selfiePath",
       };
 
       for (const [fieldName, fileArr] of Object.entries(req.files)) {
@@ -302,19 +358,10 @@ async function createEngagement(req, res) {
               { transaction }
             );
 
-            if (fieldName === "primaryId") {
+            const identityColumn = identityPathFields[fieldName];
+            if (identityColumn) {
               await NewIndividualIdentity.update(
-                { primaryIdPath: relPath },
-                { where: { engagementId: engagement.id }, transaction }
-              );
-            } else if (fieldName === "supportingId") {
-              await NewIndividualIdentity.update(
-                { supportingIdPath: relPath },
-                { where: { engagementId: engagement.id }, transaction }
-              );
-            } else if (fieldName === "selfie") {
-              await NewIndividualIdentity.update(
-                { selfiePath: relPath },
+                { [identityColumn]: relPath },
                 { where: { engagementId: engagement.id }, transaction }
               );
             }
@@ -341,11 +388,9 @@ async function createEngagement(req, res) {
       const fullData = await NewIndividualEngagement.findByPk(engagement.id, {
         include: ["client", "services", "identity", "documents", "consents", "signatures", "auditLogs", "adminReview"],
       });
+      // incomeActivities and about are now persisted, so regenerated PDFs keep them
       const plainData = fullData ? fullData.toJSON() : {};
-      plainData.incomeActivities = body.incomeActivities || [];
-      plainData.about = body.about || null;
-      plainData.software = body.software || null;
-      
+
       const clientPdfPath = await generateClientEngagementPDF(plainData);
       const adminPdfPath = await generateAdminReviewPDF(plainData);
       
@@ -460,38 +505,7 @@ async function submitAdminDecision(req, res) {
       ipAddress: req.ip || "127.0.0.1",
     });
 
-    // 3. Fetch Full Data & Regenerate PDFs
-    const fullData = await NewIndividualEngagement.findByPk(engagement.id, {
-      include: ["client", "services", "identity", "documents", "consents", "signatures", "auditLogs", "adminReview"],
-    });
-    const plainData = fullData ? fullData.toJSON() : {};
-    plainData.taxAgentName = staffName;
-
-    let adminPdfPath = null;
-    let acceptancePdfPath = null;
-    let auditPdfPath = null;
-
-    try {
-      adminPdfPath = await generateAdminReviewPDF(plainData);
-    } catch (err) {
-      console.error("Error regenerating Admin Review PDF:", err);
-    }
-
-    if (decision === "Accept" || decision === "Accepted" || decision === "Conditional Accept") {
-      try {
-        acceptancePdfPath = await generateEngagementAcceptancePDF(plainData, staffName);
-      } catch (err) {
-        console.error("Error generating Acceptance PDF:", err);
-      }
-    }
-
-    try {
-      auditPdfPath = await generateAuditReportPDF(plainData, staffName);
-    } catch (err) {
-      console.error("Error generating Audit Report PDF:", err);
-    }
-
-    // Map decision enum value for Sequelize model
+    // 3. Map decision enum value for Sequelize model
     const statusEnumMap = {
       "Accept": "Accepted",
       "Accepted": "Accepted",
@@ -532,6 +546,41 @@ async function submitAdminDecision(req, res) {
       status: mappedStatus,
       riskLevel,
       riskNotes: reviewNotes,
+    });
+
+    // 4. Generate PDFs AFTER the review and status are saved, so the documents
+    //    show this decision rather than the previous state of the record.
+    const fullData = await NewIndividualEngagement.findByPk(engagement.id, {
+      include: ["client", "services", "identity", "documents", "consents", "signatures", "auditLogs", "adminReview"],
+    });
+    const plainData = fullData ? fullData.toJSON() : {};
+    plainData.taxAgentName = staffName;
+
+    let adminPdfPath = null;
+    let acceptancePdfPath = null;
+    let auditPdfPath = null;
+
+    try {
+      adminPdfPath = await generateAdminReviewPDF(plainData);
+    } catch (err) {
+      console.error("Error regenerating Admin Review PDF:", err);
+    }
+
+    if (decision === "Accept" || decision === "Accepted" || decision === "Conditional Accept") {
+      try {
+        acceptancePdfPath = await generateEngagementAcceptancePDF(plainData, staffName);
+      } catch (err) {
+        console.error("Error generating Acceptance PDF:", err);
+      }
+    }
+
+    try {
+      auditPdfPath = await generateAuditReportPDF(plainData, staffName);
+    } catch (err) {
+      console.error("Error generating Audit Report PDF:", err);
+    }
+
+    await engagement.update({
       adminPdfPath: adminPdfPath || engagement.adminPdfPath,
       acceptancePdfPath: acceptancePdfPath || engagement.acceptancePdfPath,
       auditPdfPath: auditPdfPath || engagement.auditPdfPath,

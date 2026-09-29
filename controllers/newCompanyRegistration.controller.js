@@ -51,6 +51,64 @@ function saveBase64Signature(base64Data, subDir) {
   }
 }
 
+/* Form upload field name -> readable document type */
+const DOCUMENT_TYPE_LABELS = {
+  authorityEvidence: "Authority Evidence",
+  groupStructureChart: "Group Structure Chart",
+  occupierConsent: "Registered Office Occupier Consent",
+  cashBankingEvidence: "Cash Deposit / Banking Evidence",
+  trustDeedUpload: "Trust Deed",
+  nomineeAgreementUpload: "Nominee Agreement",
+  allOfficerIds: "Officeholder ID Documents",
+  signedDirectorConsents: "Signed Director Consents",
+  signedMemberConsents: "Signed Member Consents",
+  directorIdNotices: "Director ID Notices",
+  corporateExtracts: "Corporate Member Extracts",
+  otherLegalAgreements: "Other Legal Agreements",
+};
+
+const OFFICER_ID_FIELD = /^officer_(\d+)_idAttachment$/;
+const OFFICER_ID_BACK_FIELD = /^officer_(\d+)_idAttachmentBack$/;
+
+/**
+ * People are captured as first + last name; companies and trusts keep a single
+ * entity name. fullName remains the composed value used by lists and PDFs.
+ */
+function composePersonName(record = {}) {
+  const first = (record.firstName || "").trim();
+  const last = (record.lastName || "").trim();
+  const composed = [first, last].filter(Boolean).join(" ");
+  return {
+    firstName: first || null,
+    lastName: last || null,
+    fullName: composed || (record.fullName || "").trim() || null,
+  };
+}
+const MEMBER_EXTRACT_FIELD = /^member_(\d+)_corporateExtract$/;
+
+function resolveDocumentType(fieldName) {
+  const officerBackMatch = fieldName.match(OFFICER_ID_BACK_FIELD);
+  if (officerBackMatch) return `Officeholder ${Number(officerBackMatch[1]) + 1} Photo ID (Back)`;
+  const officerMatch = fieldName.match(OFFICER_ID_FIELD);
+  if (officerMatch) return `Officeholder ${Number(officerMatch[1]) + 1} Photo ID (Front)`;
+  const memberMatch = fieldName.match(MEMBER_EXTRACT_FIELD);
+  if (memberMatch) return `Member ${Number(memberMatch[1]) + 1} Corporate Extract`;
+  return DOCUMENT_TYPE_LABELS[fieldName] || fieldName;
+}
+
+/* Public path of a Multer file saved under public/uploads/documents/YYYY/MM */
+function documentRelPath(file) {
+  const monthFolder = path.basename(path.dirname(file.path));
+  const yearFolder = path.basename(path.dirname(path.dirname(file.path)));
+  return `/uploads/documents/${yearFolder}/${monthFolder}/${file.filename}`;
+}
+
+/* First uploaded file path for an indexed field, e.g. officer_0_idAttachment */
+function indexedFilePath(files, fieldName) {
+  const list = files[fieldName];
+  return Array.isArray(list) && list[0] ? documentRelPath(list[0]) : null;
+}
+
 /**
  * Generate a unique reference number for a new company registration
  */
@@ -139,6 +197,9 @@ async function createRegistration(req, res) {
       ultimateHoldingCountry: body.ultimateHoldingCountry,
       governanceDocument: body.governanceDocument,
       specialInstructions: body.specialInstructions,
+
+      /* Step 6: Control questions */
+      controlAnswers: parseJson(body.controlAnswers) || null,
 
       /* Step 3 */
       regOfficeHouseNumber: body.regOfficeHouseNumber,
@@ -244,11 +305,11 @@ async function createRegistration(req, res) {
     /* 2. Create officeholder records */
     const officeholders = parseJson(body.officeholders) || [];
     const createdOfficeholders = [];
-    for (const oh of officeholders) {
+    for (const [ohIndex, oh] of officeholders.entries()) {
       const sigPath = oh.signatureData ? saveBase64Signature(oh.signatureData, "signatures") || oh.signatureData : null;
       const record = await NewCompanyOfficeholder.create({
         registrationId: registration.id,
-        fullName: oh.fullName,
+        ...composePersonName(oh),
         formerNames: oh.formerNames,
         dob: oh.dob || null,
         birthCity: oh.birthCity,
@@ -266,6 +327,8 @@ async function createRegistration(req, res) {
         directorIdNumber: oh.directorIdNumber,
         idDocType: oh.idDocType,
         idDocNumber: oh.idDocNumber,
+        idDocFilePath: indexedFilePath(files, `officer_${ohIndex}_idAttachment`),
+        idDocBackFilePath: indexedFilePath(files, `officer_${ohIndex}_idAttachmentBack`),
         pepStatus: oh.pepStatus,
         sanctionsDeclaration: oh.sanctionsDeclaration,
         sourceOfWealth: oh.sourceOfWealth,
@@ -294,19 +357,20 @@ async function createRegistration(req, res) {
     /* 3. Create shareholder records */
     const shareholders = parseJson(body.shareholders) || [];
     const createdShareholders = [];
-    for (const sh of shareholders) {
+    for (const [shIndex, sh] of shareholders.entries()) {
       const record = await NewCompanyShareholder.create({
         registrationId: registration.id,
-        fullName: sh.fullName,
+        ...composePersonName(sh),
         memberType: sh.memberType || "Individual",
         address: sh.address,
         shareClass: sh.shareClass || "Ordinary",
-        numberOfShares: sh.numberOfShares || null,
-        amountPaidPerShare: sh.amountPaidPerShare || null,
-        amountUnpaidPerShare: sh.amountUnpaidPerShare || null,
+        numberOfShares: sh.numberOfShares ?? null,
+        amountPaidPerShare: sh.amountPaidPerShare ?? null,
+        amountUnpaidPerShare: sh.amountUnpaidPerShare ?? null,
         isBeneficiallyHeld: sh.isBeneficiallyHeld === "true" || sh.isBeneficiallyHeld === true,
         heldForWhom: sh.heldForWhom,
         corporateOwnershipChain: sh.corporateOwnershipChain,
+        extractFilePath: indexedFilePath(files, `member_${shIndex}_corporateExtract`),
         consentAccepted: sh.consentAccepted === "true" || sh.consentAccepted === true,
       });
       createdShareholders.push(record);
@@ -337,7 +401,7 @@ async function createRegistration(req, res) {
     for (const bo of beneficialOwners) {
       await NewCompanyBeneficialOwner.create({
         registrationId: registration.id,
-        fullName: bo.fullName,
+        ...composePersonName(bo),
         dob: bo.dob || null,
         address: bo.address,
         ownershipPercentage: bo.ownershipPercentage || null,
@@ -351,14 +415,11 @@ async function createRegistration(req, res) {
     for (const fieldName of fileFields) {
       const fileList = Array.isArray(files[fieldName]) ? files[fieldName] : [files[fieldName]];
       for (const file of fileList) {
-        const now2 = new Date();
-        const year = now2.getFullYear();
-        const month = String(now2.getMonth() + 1).padStart(2, "0");
         await NewCompanyDocument.create({
           registrationId: registration.id,
-          documentType: fieldName,
+          documentType: resolveDocumentType(fieldName),
           fileName: file.originalname || file.filename,
-          filePath: `/uploads/documents/${year}/${month}/${file.filename}`,
+          filePath: documentRelPath(file),
           fileSize: file.size,
           mimeType: file.mimetype,
           status: "Attached",
@@ -506,8 +567,14 @@ async function updateShareholder(req, res) {
     }
 
     /* Update the shareholder record */
-    await shareholder.update({
+    const updatedName = composePersonName({
+      firstName: body.firstName !== undefined ? body.firstName : shareholder.firstName,
+      lastName: body.lastName !== undefined ? body.lastName : shareholder.lastName,
       fullName: body.fullName !== undefined ? body.fullName : shareholder.fullName,
+    });
+
+    await shareholder.update({
+      ...updatedName,
       memberType: body.memberType !== undefined ? body.memberType : shareholder.memberType,
       address: body.address !== undefined ? body.address : shareholder.address,
       shareClass: body.shareClass !== undefined ? body.shareClass : shareholder.shareClass,

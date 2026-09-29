@@ -7,6 +7,7 @@
 
 const nodemailer = require("nodemailer");
 const fs = require("fs");
+const { getSettingsMap } = require("./settings.service");
 
 /**
  * Creates Nodemailer transporter configured with Hostinger SMTP settings
@@ -31,10 +32,11 @@ function createTransporter() {
  * Step 1: Send client submission receipt email & staff alert email (Phase 1).
  */
 async function sendClientSubmissionEmail(clientEmail, fullName, referenceNumber, pdfFullPath) {
+  const settings = await getSettingsMap();
   try {
     const transporter = createTransporter();
     const sender = process.env.EMAIL_SENDER || '"Financially Up" <kashif@innotechcloud.com>';
-    const receiver = process.env.EMAIL_RECEIVER || "hafiz@financiallyup.com.au";
+    const receiver = process.env.EMAIL_RECEIVER || settings["email.admin"];
     const cc = process.env.EMAIL_CC || "kashiffazalfullstack@gmail.com";
 
     const mailOptions = {
@@ -65,8 +67,8 @@ async function sendClientSubmissionEmail(clientEmail, fullName, referenceNumber,
             
             <p style="margin: 0; font-size: 13px; color: #64748b;">
               Kind regards,<br />
-              <strong style="color: #1e293b;">Financially Up Client Onboarding Team</strong><br />
-              Phone: 1300 328 316 | Email: info@financiallyup.com.au
+              <strong style="color: #1e293b;">${settings["company.name"]} Client Onboarding Team</strong><br />
+              Phone: ${settings["company.phone"]} | Email: ${settings["company.email"]}
             </p>
           </div>
         </div>
@@ -116,10 +118,11 @@ async function sendClientSubmissionEmail(clientEmail, fullName, referenceNumber,
  * Step 2: Send Tax Agent Phase 2 Decision Execution Email.
  */
 async function sendAdminDecisionEmail(clientEmail, fullName, referenceNumber, decision, staffName, notes, acceptancePdfFullPath) {
+  const settings = await getSettingsMap();
   try {
     const transporter = createTransporter();
     const sender = process.env.EMAIL_SENDER || '"Financially Up" <kashif@innotechcloud.com>';
-    const receiver = process.env.EMAIL_RECEIVER || "hafiz@financiallyup.com.au";
+    const receiver = process.env.EMAIL_RECEIVER || settings["email.admin"];
     const cc = process.env.EMAIL_CC || "kashiffazalfullstack@gmail.com";
 
     const mailOptions = {

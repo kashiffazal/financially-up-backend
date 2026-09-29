@@ -17,6 +17,7 @@ const UserRole = require("./UserRole");
 const RolePermission = require("./RolePermission");
 const Session = require("./Session");
 const AuditLog = require("./AuditLog");
+const Setting = require("./Setting");
 
 // ============================
 // Legacy Models (Preserved)
@@ -189,6 +190,7 @@ module.exports = {
   RolePermission,
   Session,
   AuditLog,
+  Setting,
   // Legacy
   IndividualEngagement,
   ApplyTfnAbns,

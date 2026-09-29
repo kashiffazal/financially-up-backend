@@ -16,20 +16,31 @@ const {
 
 const upload = require("../middleware/upload");
 
+const MAX_ENGAGEMENT_FILES = 30;
+
+/*
+ * Identity documents are captured as front/back pairs, so the field names vary
+ * (primaryIdFront, primaryIdBack, supportingIdFront, …). Accept any field name
+ * and regroup req.files into { fieldName: [files] } for the controller; the
+ * shared upload middleware still enforces file type and size limits.
+ */
+const groupFilesByField = (req, res, next) => {
+  const fileList = Array.isArray(req.files) ? req.files : [];
+  if (fileList.length > MAX_ENGAGEMENT_FILES) {
+    return res.status(400).json({
+      success: false,
+      message: `Too many files attached. Maximum is ${MAX_ENGAGEMENT_FILES}.`,
+    });
+  }
+  req.files = fileList.reduce((grouped, file) => {
+    (grouped[file.fieldname] = grouped[file.fieldname] || []).push(file);
+    return grouped;
+  }, {});
+  next();
+};
+
 // Public Client API: Submit form
-router.post(
-  "/",
-  upload.fields([
-    { name: "primaryId", maxCount: 1 },
-    { name: "supportingId", maxCount: 1 },
-    { name: "selfie", maxCount: 1 },
-    { name: "visaEvidence", maxCount: 1 },
-    { name: "atoDocuments", maxCount: 5 },
-    { name: "authorityDoc", maxCount: 1 },
-    { name: "signatureUploadedFile", maxCount: 1 },
-  ]),
-  createEngagement
-);
+router.post("/", upload.any(), groupFilesByField, createEngagement);
 
 // Admin APIs (/admin/individual-engagement-new)
 router.get("/", getEngagements);

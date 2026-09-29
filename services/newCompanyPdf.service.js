@@ -163,6 +163,14 @@ function ensurePdfDir() {
 }
 
 /**
+ * Converts a Sequelize instance (with includes) into a plain JSON object for PHP
+ */
+function toPlain(record) {
+  if (!record) return {};
+  return typeof record.toJSON === "function" ? record.toJSON() : record;
+}
+
+/**
  * Sanitize a name for use in filenames
  */
 function sanitizeName(name) {
@@ -172,7 +180,8 @@ function sanitizeName(name) {
 /**
  * 1. Generate Client Application PDF (21-section master document)
  */
-async function generateClientApplicationPDF(data) {
+async function generateClientApplicationPDF(record) {
+  const data = toPlain(record);
   const ref = data.referenceNumber || `CREG-${Date.now()}`;
   const { pdfDir, year, month } = ensurePdfDir();
 
@@ -192,7 +201,8 @@ async function generateClientApplicationPDF(data) {
 /**
  * 2. Generate Admin Compliance Review PDF (internal-only)
  */
-async function generateAdminReviewPDF(data) {
+async function generateAdminReviewPDF(record) {
+  const data = toPlain(record);
   const ref = data.referenceNumber || `CREG-${Date.now()}`;
   const { pdfDir, year, month } = ensurePdfDir();
 
@@ -213,7 +223,9 @@ async function generateAdminReviewPDF(data) {
  * 3. Generate individual Director Consent PDFs (one per officeholder)
  * Returns array of generated PDF paths
  */
-async function generateDirectorConsentPDFs(registration, officeholders) {
+async function generateDirectorConsentPDFs(record, officeholderRecords) {
+  const registration = toPlain(record);
+  const officeholders = (officeholderRecords || []).map(toPlain);
   const ref = registration.referenceNumber || `CREG-${Date.now()}`;
   const { pdfDir, year, month } = ensurePdfDir();
   const paths = [];
@@ -222,7 +234,7 @@ async function generateDirectorConsentPDFs(registration, officeholders) {
     if (!oh.consentAccepted) continue;
 
     const safeName = sanitizeName(oh.fullName);
-    const fileName = `Director_Consent_${safeName}.pdf`;
+    const fileName = `${ref}_Director_Consent_${safeName}.pdf`;
     const fullPath = path.join(pdfDir, fileName);
     const relPath = `/uploads/pdf/${year}/${month}/${fileName}`;
 
@@ -244,7 +256,9 @@ async function generateDirectorConsentPDFs(registration, officeholders) {
  * 4. Generate individual Member Consent PDFs (one per shareholder)
  * Returns array of generated PDF paths
  */
-async function generateMemberConsentPDFs(registration, shareholders) {
+async function generateMemberConsentPDFs(record, shareholderRecords) {
+  const registration = toPlain(record);
+  const shareholders = (shareholderRecords || []).map(toPlain);
   const ref = registration.referenceNumber || `CREG-${Date.now()}`;
   const { pdfDir, year, month } = ensurePdfDir();
   const paths = [];
@@ -253,7 +267,7 @@ async function generateMemberConsentPDFs(registration, shareholders) {
     if (!sh.consentAccepted) continue;
 
     const safeName = sanitizeName(sh.fullName);
-    const fileName = `Member_Consent_${safeName}.pdf`;
+    const fileName = `${ref}_Member_Consent_${safeName}.pdf`;
     const fullPath = path.join(pdfDir, fileName);
     const relPath = `/uploads/pdf/${year}/${month}/${fileName}`;
 

@@ -22,11 +22,28 @@ const NewIndividualIdentity = sequelize.define("new_individual_identities", {
     type: DataTypes.STRING(50),
     allowNull: true,
   },
+  primaryIdType: {
+    type: DataTypes.STRING(60),
+    allowNull: true,
+  },
+  // Front (or passport photo page)
   primaryIdPath: {
     type: DataTypes.TEXT,
     allowNull: true,
   },
+  primaryIdBackPath: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+  supportingIdType: {
+    type: DataTypes.STRING(60),
+    allowNull: true,
+  },
   supportingIdPath: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+  supportingIdBackPath: {
     type: DataTypes.TEXT,
     allowNull: true,
   },

@@ -14,6 +14,16 @@ const NewIndividualClient = sequelize.define("new_individual_clients", {
     autoIncrement: true,
     primaryKey: true,
   },
+  // Captured separately on the form; fullName stays as the composed value so
+  // existing records, admin tables, exports and PDFs keep working.
+  firstName: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+  },
+  lastName: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+  },
   fullName: {
     type: DataTypes.STRING(150),
     allowNull: false,

@@ -27,6 +27,7 @@ const userRoutes = require("./routes/user.routes");
 const roleRoutes = require("./routes/role.routes");
 const permissionRoutes = require("./routes/permission.routes");
 const auditRoutes = require("./routes/audit.routes");
+const settingRoutes = require("./routes/setting.routes");
 
 // Import Application Route files
 const individualEngagementRoutes = require("./routes/individualEngagement.routes");
@@ -165,6 +166,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/roles", roleRoutes);
 app.use("/api/permissions", permissionRoutes);
 app.use("/api/audit-logs", auditRoutes);
+app.use("/api/settings", settingRoutes);
 
 // Operational Form and Application Routes
 app.use("/api/individual-engagement", individualEngagementRoutes);

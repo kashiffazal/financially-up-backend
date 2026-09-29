@@ -21,6 +21,8 @@ const NewCompanyBeneficialOwner = sequelize.define("new_company_beneficial_owner
   },
 
   /* ─── UBO Details ─── */
+  firstName: { type: DataTypes.STRING(100), allowNull: true },
+  lastName: { type: DataTypes.STRING(100), allowNull: true },
   fullName: { type: DataTypes.STRING(255), allowNull: true },
   dob: { type: DataTypes.DATEONLY, allowNull: true },
   address: { type: DataTypes.TEXT, allowNull: true },

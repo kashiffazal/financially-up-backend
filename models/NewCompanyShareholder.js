@@ -22,6 +22,8 @@ const NewCompanyShareholder = sequelize.define("new_company_shareholders", {
   },
 
   /* ─── Member Details ─── */
+  firstName: { type: DataTypes.STRING(100), allowNull: true },
+  lastName: { type: DataTypes.STRING(100), allowNull: true },
   fullName: { type: DataTypes.STRING(255), allowNull: true },
   memberType: {
     type: DataTypes.ENUM("Individual", "Company", "Trust", "Other"),

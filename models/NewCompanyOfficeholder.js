@@ -22,6 +22,8 @@ const NewCompanyOfficeholder = sequelize.define("new_company_officeholders", {
   },
 
   /* ─── Personal Details ─── */
+  firstName: { type: DataTypes.STRING(100), allowNull: true },
+  lastName: { type: DataTypes.STRING(100), allowNull: true },
   fullName: { type: DataTypes.STRING(255), allowNull: true },
   formerNames: { type: DataTypes.STRING(255), allowNull: true },
   dob: { type: DataTypes.DATEONLY, allowNull: true },
@@ -51,6 +53,7 @@ const NewCompanyOfficeholder = sequelize.define("new_company_officeholders", {
   idDocType: { type: DataTypes.STRING(100), allowNull: true },
   idDocNumber: { type: DataTypes.STRING(100), allowNull: true },
   idDocFilePath: { type: DataTypes.TEXT, allowNull: true },
+  idDocBackFilePath: { type: DataTypes.TEXT, allowNull: true },
 
   /* ─── Compliance Declarations ─── */
   pepStatus: { type: DataTypes.STRING(50), allowNull: true, comment: "Politically Exposed Person status" },
