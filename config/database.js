@@ -12,7 +12,7 @@ const { Sequelize } = require("sequelize");
 const sequelize = new Sequelize(
   process.env.DB_NAME || "financially-up",
   process.env.DB_USER || "root",
-  process.env.DB_PASSWORD || "",
+  process.env.DB_PASSWORD || "innotechPC123$#",
   {
     host: process.env.DB_HOST || "localhost",
     port: process.env.DB_PORT || 3306,
@@ -35,7 +35,7 @@ const sequelize = new Sequelize(
       underscored: false, // Keep camelCase column names (matching the form field names)
       freezeTableName: true, // Use exact model name as table name (no auto-pluralization)
     },
-  }
+  },
 );
 
 module.exports = sequelize;

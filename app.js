@@ -42,6 +42,7 @@ const smsfRegistrationRoutes = require("./routes/smsfRegistration.routes");
 const companyRegistrationRoutes = require("./routes/companyRegistration.routes");
 const newIndividualEngagementRoutes = require("./routes/newIndividualEngagement.routes");
 const newCompanyRegistrationRoutes = require("./routes/newCompanyRegistration.routes");
+const dashboardRoutes = require("./routes/dashboard.routes");
 
 // Create Express app
 const app = express();
@@ -181,6 +182,7 @@ app.use("/api/smsf-registrations", smsfRegistrationRoutes);
 app.use("/api/company-registrations", companyRegistrationRoutes);
 app.use("/api/new-individual-engagements", newIndividualEngagementRoutes);
 app.use("/api/new-company-registrations", newCompanyRegistrationRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 // ============================
 // Error Handling
