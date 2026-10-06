@@ -25,6 +25,23 @@ const authLimiter = rateLimit({
   },
 });
 
+/**
+ * Limiter for the admin global search (debounced type-ahead).
+ * Keyed per authenticated user, falling back to IP. Defaults to 120 searches per minute.
+ */
+const searchLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: parseInt(process.env.SEARCH_RATE_LIMIT_PER_MINUTE, 10) || 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req, res) => (req.user?.id ? `user-${req.user.id}` : rateLimit.ipKeyGenerator(req.ip)),
+  message: {
+    success: false,
+    message: "Too many searches in a short time. Please wait a moment and try again.",
+  },
+});
+
 module.exports = {
   authLimiter,
+  searchLimiter,
 };
