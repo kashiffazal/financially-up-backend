@@ -6,12 +6,13 @@
 
 const express = require("express");
 const router = express.Router();
+const { authenticate } = require("../middleware/authenticate");
 const { getAll, getById, create, update, remove } = require("../controllers/companyRegistration.controller");
 
-router.get("/", getAll);
-router.get("/:id", getById);
+router.get("/", authenticate, getAll);
+router.get("/:id", authenticate, getById);
 router.post("/", create);
-router.put("/:id", update);
-router.delete("/:id", remove);
+router.put("/:id", authenticate, update);
+router.delete("/:id", authenticate, remove);
 
 module.exports = router;

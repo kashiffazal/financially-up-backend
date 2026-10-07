@@ -15,6 +15,7 @@
 
 const { IndividualEngagement } = require("../models");
 const { successResponse, errorResponse } = require("../utils/apiResponse");
+const notificationService = require("../services/notification.service");
 const { Op } = require("sequelize");
 
 /**
@@ -110,12 +111,14 @@ const create = async (req, res, next) => {
     const formData = req.body;
 
     // Set default status if not provided
-    if (!formData.status) {
-      formData.status = "New Query";
-    }
+    // Public submissions always start as a new query (clients cannot set their own status)
+    formData.status = "New Query";
 
     // Create the record - Sequelize will only save fields that match the model
     const engagement = await IndividualEngagement.create(formData);
+
+    // Notify staff (fire-and-forget; never blocks the client response)
+    notificationService.notifySubmission("IndividualEngagement", engagement);
 
     return successResponse(
       res,
@@ -148,7 +151,9 @@ const update = async (req, res, next) => {
     }
 
     // Update the record with new data
+    const previousStatus = engagement.status;
     await engagement.update(updateData);
+    notificationService.notifyStatusChange("IndividualEngagement", engagement, previousStatus, req);
 
     return successResponse(
       res,

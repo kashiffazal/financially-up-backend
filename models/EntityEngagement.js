@@ -12,6 +12,11 @@ const { DataTypes } = require("sequelize");
 const sequelize = require("../config/database");
 
 const EntityEngagement = sequelize.define("entity_engagements", {
+  /** Complete public form submission (every answer + uploaded files) — see formSubmission.service */
+  submissionData: {
+    type: DataTypes.JSON,
+    allowNull: true,
+  },
   // ============================
   // Primary Key
   // ============================

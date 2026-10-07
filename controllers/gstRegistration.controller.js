@@ -15,6 +15,17 @@
 
 const { GstRegistration } = require("../models");
 const { successResponse, errorResponse } = require("../utils/apiResponse");
+const notificationService = require("../services/notification.service");
+const { buildSubmission, splitName } = require("../services/formSubmission.service");
+
+/** Public form field → table column, where the names differ */
+const FIELD_ALIASES = {
+  // Contact person → first / last name columns (used by tables, search & notifications)
+  contactName: (value) => {
+    const name = splitName(value);
+    return { firstName: name.first, lastName: name.last };
+  },
+};
 const { Op } = require("sequelize");
 
 /**
@@ -110,22 +121,18 @@ const getById = async (req, res, next) => {
  */
 const create = async (req, res, next) => {
   try {
-    const formData = req.body;
-
-    // Set default status if not provided
-    if (!formData.status) {
-      formData.status = "New Query";
-    }
+    // Map answers to columns + keep the full submission (answers without a column are never lost).
+    // Public submissions always start as a new query (clients cannot set their own status).
+    const { columns, submissionData } = buildSubmission(req, GstRegistration, FIELD_ALIASES);
+    const formData = { ...columns, submissionData, status: "New Query" };
 
     // Create the record - Sequelize will only save fields that match the model
     const record = await GstRegistration.create(formData);
 
-    return successResponse(
-      res,
-      "GST registration record created successfully",
-      record,
-      201,
-    );
+    // Notify staff (fire-and-forget; never blocks the client response)
+    notificationService.notifySubmission("GstRegistration", record);
+
+    return successResponse(res, "GST registration record created successfully", { ...record.toJSON(), referenceNumber: `GST-${record.id}` }, 201);
   } catch (error) {
     next(error);
   }
@@ -146,7 +153,11 @@ const update = async (req, res, next) => {
       return errorResponse(res, "GST registration record not found", 404);
     }
 
+    const previousStatus = record.status;
+
     await record.update(updateData);
+
+    notificationService.notifyStatusChange("GstRegistration", record, previousStatus, req);
 
     return successResponse(
       res,

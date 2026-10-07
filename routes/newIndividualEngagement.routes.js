@@ -6,6 +6,7 @@
 
 const express = require("express");
 const router = express.Router();
+const { authenticate } = require("../middleware/authenticate");
 
 const {
   createEngagement,
@@ -43,29 +44,25 @@ const groupFilesByField = (req, res, next) => {
 router.post("/", upload.any(), groupFilesByField, createEngagement);
 
 // Admin APIs (/admin/individual-engagement-new)
-router.get("/", getEngagements);
+router.get("/", authenticate, getEngagements);
 
 // Admin Record Deletion
-router.delete("/:id", deleteEngagement);
+router.delete("/:id", authenticate, deleteEngagement);
 
 // Admin Decision Endpoint (Supports both PUT & POST, /decision & /admin-decision)
-router.put(
-  "/:id/decision",
+router.put("/:id/decision", authenticate,
   upload.fields([{ name: "staffUploadedSignature", maxCount: 1 }]),
   submitAdminDecision
 );
-router.post(
-  "/:id/decision",
+router.post("/:id/decision", authenticate,
   upload.fields([{ name: "staffUploadedSignature", maxCount: 1 }]),
   submitAdminDecision
 );
-router.put(
-  "/:id/admin-decision",
+router.put("/:id/admin-decision", authenticate,
   upload.fields([{ name: "staffUploadedSignature", maxCount: 1 }]),
   submitAdminDecision
 );
-router.post(
-  "/:id/admin-decision",
+router.post("/:id/admin-decision", authenticate,
   upload.fields([{ name: "staffUploadedSignature", maxCount: 1 }]),
   submitAdminDecision
 );

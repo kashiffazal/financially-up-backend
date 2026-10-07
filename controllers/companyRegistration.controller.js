@@ -6,6 +6,7 @@
 
 const { CompanyRegistration } = require("../models");
 const { successResponse, errorResponse } = require("../utils/apiResponse");
+const notificationService = require("../services/notification.service");
 const { Op } = require("sequelize");
 
 /** GET /api/company-registrations - Fetch all with pagination, status filter, search */
@@ -70,8 +71,12 @@ const getById = async (req, res, next) => {
 const create = async (req, res, next) => {
   try {
     const formData = req.body;
-    if (!formData.status) formData.status = "New Query";
+    // Public submissions always start as a new query (clients cannot set their own status)
+    formData.status = "New Query";
     const record = await CompanyRegistration.create(formData);
+
+    // Notify staff (fire-and-forget; never blocks the client response)
+    notificationService.notifySubmission("CompanyRegistration", record);
     return successResponse(res, "Record created successfully", record, 201);
   } catch (error) {
     next(error);
@@ -83,7 +88,9 @@ const update = async (req, res, next) => {
   try {
     const record = await CompanyRegistration.findByPk(req.params.id);
     if (!record) return errorResponse(res, "Record not found", 404);
+    const previousStatus = record.status;
     await record.update(req.body);
+    notificationService.notifyStatusChange("CompanyRegistration", record, previousStatus, req);
     return successResponse(res, "Record updated successfully", record);
   } catch (error) {
     next(error);

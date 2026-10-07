@@ -13,6 +13,11 @@ const { DataTypes } = require("sequelize");
 const sequelize = require("../config/database");
 
 const Medicare = sequelize.define("medicares", {
+  /** Complete public form submission (every answer + uploaded files) — see formSubmission.service */
+  submissionData: {
+    type: DataTypes.JSON,
+    allowNull: true,
+  },
   // ============================
   // Primary Key
   // ============================

@@ -16,6 +16,11 @@ const { DataTypes } = require("sequelize");
 const sequelize = require("../config/database");
 
 const ApplyTfnAbns = sequelize.define("apply_tfn_abns", {
+  /** Complete public form submission (every answer + uploaded files) — see formSubmission.service */
+  submissionData: {
+    type: DataTypes.JSON,
+    allowNull: true,
+  },
   // ============================
   // Primary Key
   // ============================

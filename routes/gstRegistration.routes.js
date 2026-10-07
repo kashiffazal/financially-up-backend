@@ -16,6 +16,8 @@
 
 const express = require("express");
 const router = express.Router();
+const { authenticate } = require("../middleware/authenticate");
+const upload = require("../middleware/upload");
 const {
   getAll,
   getById,
@@ -25,18 +27,19 @@ const {
 } = require("../controllers/gstRegistration.controller");
 
 // GET /api/gst-registrations - Fetch all with pagination & filters
-router.get("/", getAll);
+router.get("/", authenticate, getAll);
 
 // GET /api/gst-registrations/:id - Fetch single record by ID
-router.get("/:id", getById);
+router.get("/:id", authenticate, getById);
 
 // POST /api/gst-registrations - Create new record (Old App calls this)
-router.post("/", create);
+// Public form submission (JSON or multipart with evidence uploads)
+router.post("/", upload.publicForm.any(), create);
 
 // PUT /api/gst-registrations/:id - Update existing record
-router.put("/:id", update);
+router.put("/:id", authenticate, update);
 
 // DELETE /api/gst-registrations/:id - Delete a record
-router.delete("/:id", remove);
+router.delete("/:id", authenticate, remove);
 
 module.exports = router;

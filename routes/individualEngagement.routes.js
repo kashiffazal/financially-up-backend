@@ -16,6 +16,7 @@
 
 const express = require("express");
 const router = express.Router();
+const { authenticate } = require("../middleware/authenticate");
 const {
   getAll,
   getById,
@@ -25,18 +26,18 @@ const {
 } = require("../controllers/individualEngagement.controller");
 
 // GET /api/individual-engagement - Fetch all with pagination & filters
-router.get("/", getAll);
+router.get("/", authenticate, getAll);
 
 // GET /api/individual-engagement/:id - Fetch single record by ID
-router.get("/:id", getById);
+router.get("/:id", authenticate, getById);
 
 // POST /api/individual-engagement - Create new record (Old App calls this)
 router.post("/", create);
 
 // PUT /api/individual-engagement/:id - Update existing record
-router.put("/:id", update);
+router.put("/:id", authenticate, update);
 
 // DELETE /api/individual-engagement/:id - Delete a record
-router.delete("/:id", remove);
+router.delete("/:id", authenticate, remove);
 
 module.exports = router;

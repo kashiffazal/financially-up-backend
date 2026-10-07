@@ -12,6 +12,11 @@ const { DataTypes } = require("sequelize");
 const sequelize = require("../config/database");
 
 const ChangesToCompanyDetails = sequelize.define("changes_to_company_details", {
+  /** Complete public form submission (every answer + uploaded files) — see formSubmission.service */
+  submissionData: {
+    type: DataTypes.JSON,
+    allowNull: true,
+  },
   // ============================
   // Primary Key
   // ============================

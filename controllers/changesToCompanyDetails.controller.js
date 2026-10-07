@@ -6,6 +6,11 @@
 
 const { ChangesToCompanyDetails } = require("../models");
 const { successResponse, errorResponse } = require("../utils/apiResponse");
+const notificationService = require("../services/notification.service");
+const { buildSubmission } = require("../services/formSubmission.service");
+
+/** Public form field → table column, where the names differ */
+const FIELD_ALIASES = { CompanyName: "NameOfCompany", ACN: "ACNorABN", firstName: "fname", lastName: "lname" };
 const { Op } = require("sequelize");
 
 /** GET /api/changes-to-company-details - Fetch all with pagination, status filter, search */
@@ -69,10 +74,15 @@ const getById = async (req, res, next) => {
 /** POST /api/changes-to-company-details */
 const create = async (req, res, next) => {
   try {
-    const formData = req.body;
-    if (!formData.status) formData.status = "New Query";
+    // Map answers to columns + keep the full submission (answers without a column are never lost).
+    // Public submissions always start as a new query (clients cannot set their own status).
+    const { columns, submissionData } = buildSubmission(req, ChangesToCompanyDetails, FIELD_ALIASES);
+    const formData = { ...columns, submissionData, status: "New Query" };
     const record = await ChangesToCompanyDetails.create(formData);
-    return successResponse(res, "Record created successfully", record, 201);
+
+    // Notify staff (fire-and-forget; never blocks the client response)
+    notificationService.notifySubmission("ChangesToCompanyDetails", record);
+    return successResponse(res, "Record created successfully", { ...record.toJSON(), referenceNumber: `CHG-${record.id}` }, 201);
   } catch (error) {
     next(error);
   }
@@ -83,7 +93,9 @@ const update = async (req, res, next) => {
   try {
     const record = await ChangesToCompanyDetails.findByPk(req.params.id);
     if (!record) return errorResponse(res, "Record not found", 404);
+    const previousStatus = record.status;
     await record.update(req.body);
+    notificationService.notifyStatusChange("ChangesToCompanyDetails", record, previousStatus, req);
     return successResponse(res, "Record updated successfully", record);
   } catch (error) {
     next(error);

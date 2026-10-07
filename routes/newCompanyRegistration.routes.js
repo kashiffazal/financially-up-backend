@@ -7,6 +7,7 @@
 
 const express = require("express");
 const router = express.Router();
+const { authenticate } = require("../middleware/authenticate");
 
 const {
   createRegistration,
@@ -14,6 +15,7 @@ const {
   getRegistrationById,
   updateShareholder,
   submitAdminDecision,
+  updateStatus,
   getPdf,
   regeneratePdf,
 } = require("../controllers/newCompanyRegistration.controller");
@@ -51,40 +53,39 @@ router.post("/", upload.any(), groupFilesByField, createRegistration);
 /* ─── Admin APIs ─── */
 
 /* List all registrations with pagination, search & status filters */
-router.get("/", getRegistrations);
+router.get("/", authenticate, getRegistrations);
 
 /* Get full details of a single registration */
-router.get("/:id", getRegistrationById);
+router.get("/:id", authenticate, getRegistrationById);
 
 /* Update a shareholder (triggers consent invalidation if shares change) */
-router.put("/:id/shareholders/:memberId", updateShareholder);
+router.put("/:id/shareholders/:memberId", authenticate, updateShareholder);
 
 /* Submit admin AML/CTF review decision */
-router.put(
-  "/:id/decision",
+router.put("/:id/decision", authenticate,
   upload.fields([{ name: "staffSignature", maxCount: 1 }]),
   submitAdminDecision
 );
-router.post(
-  "/:id/decision",
+router.post("/:id/decision", authenticate,
   upload.fields([{ name: "staffSignature", maxCount: 1 }]),
   submitAdminDecision
 );
-router.put(
-  "/:id/admin-decision",
+router.put("/:id/admin-decision", authenticate,
   upload.fields([{ name: "staffSignature", maxCount: 1 }]),
   submitAdminDecision
 );
-router.post(
-  "/:id/admin-decision",
+router.post("/:id/admin-decision", authenticate,
   upload.fields([{ name: "staffSignature", maxCount: 1 }]),
   submitAdminDecision
 );
+
+/* Change lifecycle status (admin log row / bulk actions) */
+router.put("/:id/status", authenticate, updateStatus);
 
 /* Download/view generated PDF by type */
-router.get("/:id/pdf/:type", getPdf);
+router.get("/:id/pdf/:type", authenticate, getPdf);
 
 /* Regenerate PDFs on demand */
-router.post("/:id/regenerate-pdf", regeneratePdf);
+router.post("/:id/regenerate-pdf", authenticate, regeneratePdf);
 
 module.exports = router;

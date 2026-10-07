@@ -120,6 +120,10 @@ const SYSTEM_PERMISSIONS = [
   { module: "pdf", resource: "pdf", action: "view", slug: "pdf.view", name: "View Generated PDFs", description: "View generated summary and lodgment PDFs" },
   { module: "pdf", resource: "pdf", action: "generate", slug: "pdf.generate", name: "Generate PDFs", description: "Generate new PDF summaries" },
   { module: "pdf", resource: "pdf", action: "download", slug: "pdf.download", name: "Download PDFs", description: "Download generated PDF files" },
+
+  // Website Contact Enquiries
+  { module: "enquiries", resource: "enquiry", action: "view", slug: "enquiries.view", name: "View Contact Enquiries", description: "View messages sent from the website contact forms" },
+  { module: "enquiries", resource: "enquiry", action: "manage", slug: "enquiries.manage", name: "Manage Contact Enquiries", description: "Update enquiry status, add staff notes and delete enquiries" },
 ];
 
 // Initial roles to seed
@@ -215,6 +219,7 @@ const seedRBAC = async () => {
         "changes_to_company.request.view", "changes_to_company.request.create", "changes_to_company.request.edit",
         "documents.view", "documents.upload", "documents.download",
         "pdf.view", "pdf.generate", "pdf.download",
+        "enquiries.view", "enquiries.manage",
       ];
       for (const slug of accountantPermSlugs) {
         const perm = permissionMap.get(slug);
@@ -243,6 +248,7 @@ const seedRBAC = async () => {
         "documents.view", "documents.download",
         "pdf.view", "pdf.download",
         "audit.view",
+        "enquiries.view",
       ];
       for (const slug of reviewerPermSlugs) {
         const perm = permissionMap.get(slug);

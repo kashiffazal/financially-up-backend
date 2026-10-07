@@ -44,6 +44,8 @@ const newIndividualEngagementRoutes = require("./routes/newIndividualEngagement.
 const newCompanyRegistrationRoutes = require("./routes/newCompanyRegistration.routes");
 const dashboardRoutes = require("./routes/dashboard.routes");
 const searchRoutes = require("./routes/search.routes");
+const notificationRoutes = require("./routes/notification.routes");
+const contactEnquiryRoutes = require("./routes/contactEnquiry.routes");
 
 // Create Express app
 const app = express();
@@ -185,6 +187,8 @@ app.use("/api/new-individual-engagements", newIndividualEngagementRoutes);
 app.use("/api/new-company-registrations", newCompanyRegistrationRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/search", searchRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/contact-enquiries", contactEnquiryRoutes);
 
 // ============================
 // Error Handling

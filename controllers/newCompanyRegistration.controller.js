@@ -25,6 +25,20 @@ const NewCompanyPdf = require("../models/NewCompanyPdf");
 const NewCompanyAuditLog = require("../models/NewCompanyAuditLog");
 const { invalidateOutdatedConsents, createConsent, computeConsentHash } = require("../services/consentValidation.service");
 const { generateClientApplicationPDF, generateAdminReviewPDF, generateDirectorConsentPDFs, generateMemberConsentPDFs } = require("../services/newCompanyPdf.service");
+const notificationService = require("../services/notification.service");
+
+/** Lifecycle statuses an admin may set directly (matches COMPANY_REG_STATUS_LIST in the admin UI) */
+const COMPANY_STATUSES = [
+  "Submitted",
+  "Under Review",
+  "Pending Documents",
+  "Approved",
+  "Approved With Conditions",
+  "On Hold",
+  "Lodged with ASIC",
+  "Declined",
+  "Draft",
+];
 
 /**
  * Helper: save a base64 signature image to disk
@@ -454,6 +468,9 @@ async function createRegistration(req, res) {
       console.error("PDF generation error (non-blocking):", pdfErr);
     }
 
+    // Notify staff (fire-and-forget)
+    notificationService.notifySubmission("NewCompanyRegistration", registration);
+
     return res.status(201).json({
       success: true,
       message: "Company registration submitted successfully.",
@@ -485,6 +502,9 @@ async function getRegistrations(req, res) {
     const offset = (parseInt(page) - 1) * parseInt(limit);
 
     const where = {};
+    // ?id=<n> → just that row, in the same shape as the list (live table updates)
+    const id = parseInt(req.query.id, 10);
+    if (id > 0) where.id = id;
     if (status && status !== "All") {
       where.status = status;
     }
@@ -683,7 +703,11 @@ async function submitAdminDecision(req, res) {
       "Completed": "Approved",
     };
     const mappedStatus = statusMap[body.reviewStatus] || "Under Review";
+    const previousStatus = registration.status;
     await registration.update({ status: mappedStatus });
+    notificationService.notifyStatusChange("NewCompanyRegistration", registration, previousStatus, req, {
+      notes: body.decisionNotes || null,
+    });
 
     /* Generate admin review PDF */
     let adminPdfPath = null;
@@ -714,6 +738,51 @@ async function submitAdminDecision(req, res) {
   } catch (error) {
     console.error("Error submitting admin decision:", error);
     return res.status(500).json({ success: false, message: "Failed to submit decision.", error: error.message });
+  }
+}
+
+/**
+ * PUT /:id/status — Change lifecycle status from the admin log (row action / bulk action)
+ */
+async function updateStatus(req, res) {
+  try {
+    const { id } = req.params;
+    const status = String(req.body?.status || "").trim();
+
+    if (!COMPANY_STATUSES.includes(status)) {
+      return res.status(400).json({ success: false, message: `Invalid status "${status}".` });
+    }
+
+    const registration = await NewCompanyRegistration.findByPk(id);
+    if (!registration) {
+      return res.status(404).json({ success: false, message: "Registration not found." });
+    }
+
+    const previousStatus = registration.status;
+    if (previousStatus === status) {
+      return res.status(200).json({ success: true, message: `Registration is already ${status}.`, data: { id: registration.id, status } });
+    }
+
+    await registration.update({ status });
+
+    await NewCompanyAuditLog.create({
+      registrationId: registration.id,
+      action: `Status changed: ${previousStatus || "—"} → ${status}`,
+      performedBy: req.user?.fullName || req.user?.email || "Staff",
+      details: { fromStatus: previousStatus, toStatus: status },
+      ipAddress: req.ip || "127.0.0.1",
+    });
+
+    notificationService.notifyStatusChange("NewCompanyRegistration", registration, previousStatus, req);
+
+    return res.status(200).json({
+      success: true,
+      message: `Registration updated to ${status}.`,
+      data: { id: registration.id, status },
+    });
+  } catch (error) {
+    console.error("Error updating registration status:", error);
+    return res.status(500).json({ success: false, message: "Failed to update status." });
   }
 }
 
@@ -791,6 +860,7 @@ module.exports = {
   getRegistrationById,
   updateShareholder,
   submitAdminDecision,
+  updateStatus,
   getPdf,
   regeneratePdf,
 };

@@ -119,6 +119,26 @@ const initDatabase = async (retries = 3, delayMs = 3000) => {
         await sequelize.query("ALTER TABLE new_individual_identities ADD COLUMN supportingIdType VARCHAR(60) NULL").catch(() => {});
         await sequelize.query("ALTER TABLE new_individual_identities ADD COLUMN supportingIdBackPath TEXT NULL").catch(() => {});
         await sequelize.query("ALTER TABLE new_company_officeholders ADD COLUMN idDocBackFilePath TEXT NULL").catch(() => {});
+
+        // Website enquiries: email delivery tracking + spam reason
+        await sequelize.query("ALTER TABLE contact_enquiries ADD COLUMN staffEmailStatus VARCHAR(20) NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE contact_enquiries ADD COLUMN staffEmailError TEXT NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE contact_enquiries ADD COLUMN confirmationEmailStatus VARCHAR(20) NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE contact_enquiries ADD COLUMN confirmationEmailError TEXT NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE contact_enquiries ADD COLUMN spamReason VARCHAR(100) NULL").catch(() => {});
+
+        // Public application forms: full submission snapshot (answers + uploaded files)
+        await sequelize.query("ALTER TABLE gst_registrations ADD COLUMN submissionData JSON NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE medicares ADD COLUMN submissionData JSON NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE trust_registrations ADD COLUMN submissionData JSON NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE smsf_registrations ADD COLUMN submissionData JSON NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE business_name_registrations ADD COLUMN submissionData JSON NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE apply_tfn_abns ADD COLUMN submissionData JSON NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE entity_engagements ADD COLUMN submissionData JSON NULL").catch(() => {});
+        await sequelize.query("ALTER TABLE changes_to_company_details ADD COLUMN submissionData JSON NULL").catch(() => {});
+
+        // Notifications: per-user "removed from my list"
+        await sequelize.query("ALTER TABLE notification_reads ADD COLUMN dismissedAt DATETIME NULL").catch(() => {});
       } catch (patchErr) {
         console.warn("Schema patch notice:", patchErr.message);
       }

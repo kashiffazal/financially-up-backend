@@ -51,4 +51,14 @@ const upload = multer({
   limits: { fileSize: 15 * 1024 * 1024 }, // 15MB max file size
 });
 
+/**
+ * Public application forms (multipart with optional evidence uploads):
+ * same storage/type rules, capped at 20 files of 15MB each.
+ */
+upload.publicForm = multer({
+  storage,
+  fileFilter,
+  limits: { fileSize: 15 * 1024 * 1024, files: 20 },
+});
+
 module.exports = upload;

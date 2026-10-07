@@ -15,6 +15,11 @@
 
 const { ApplyTfnAbns } = require("../models");
 const { successResponse, errorResponse } = require("../utils/apiResponse");
+const notificationService = require("../services/notification.service");
+const { buildSubmission } = require("../services/formSubmission.service");
+
+/** Public form field → table column, where the names differ */
+const FIELD_ALIASES = {};
 const { Op } = require("sequelize");
 
 /**
@@ -114,22 +119,18 @@ const getById = async (req, res, next) => {
  */
 const create = async (req, res, next) => {
   try {
-    const formData = req.body;
-
-    // Set default status if not provided
-    if (!formData.status) {
-      formData.status = "New Query";
-    }
+    // Map answers to columns + keep the full submission (answers without a column are never lost).
+    // Public submissions always start as a new query (clients cannot set their own status).
+    const { columns, submissionData } = buildSubmission(req, ApplyTfnAbns, FIELD_ALIASES);
+    const formData = { ...columns, submissionData, status: "New Query" };
 
     // Create the record - Sequelize will only save fields that match the model
     const record = await ApplyTfnAbns.create(formData);
 
-    return successResponse(
-      res,
-      "Apply TFN & ABN record created successfully",
-      record,
-      201, // 201 Created
-    );
+    // Notify staff (fire-and-forget; never blocks the client response)
+    notificationService.notifySubmission("ApplyTfnAbns", record);
+
+    return successResponse(res, "Apply TFN & ABN record created successfully", { ...record.toJSON(), referenceNumber: `TFN-${record.id}` }, 201);
   } catch (error) {
     next(error);
   }
@@ -155,7 +156,9 @@ const update = async (req, res, next) => {
     }
 
     // Update the record with new data
+    const previousStatus = record.status;
     await record.update(updateData);
+    notificationService.notifyStatusChange("ApplyTfnAbns", record, previousStatus, req);
 
     return successResponse(
       res,

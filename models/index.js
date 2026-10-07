@@ -18,6 +18,9 @@ const RolePermission = require("./RolePermission");
 const Session = require("./Session");
 const AuditLog = require("./AuditLog");
 const Setting = require("./Setting");
+const Notification = require("./Notification");
+const NotificationRead = require("./NotificationRead");
+const ContactEnquiry = require("./ContactEnquiry");
 
 // ============================
 // Legacy Models (Preserved)
@@ -180,6 +183,10 @@ NewCompanyRegistration.hasMany(NewCompanyAuditLog, { foreignKey: "registrationId
 NewCompanyAuditLog.belongsTo(NewCompanyRegistration, { foreignKey: "registrationId" });
 
 // Export all models and the sequelize instance
+// Notifications ↔ per-user read state
+Notification.hasMany(NotificationRead, { foreignKey: "notificationId", as: "reads", onDelete: "CASCADE" });
+NotificationRead.belongsTo(Notification, { foreignKey: "notificationId" });
+
 module.exports = {
   sequelize,
   // RBAC & Auth
@@ -191,6 +198,10 @@ module.exports = {
   Session,
   AuditLog,
   Setting,
+  // Notifications & website enquiries
+  Notification,
+  NotificationRead,
+  ContactEnquiry,
   // Legacy
   IndividualEngagement,
   ApplyTfnAbns,

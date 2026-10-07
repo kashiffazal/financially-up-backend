@@ -5,27 +5,15 @@
  * using Nodemailer configured with Hostinger SMTP for the New Individual Engagement Form.
  */
 
-const nodemailer = require("nodemailer");
 const fs = require("fs");
 const { getSettingsMap } = require("./settings.service");
+const { getTransporter } = require("./mail.service");
 
 /**
- * Creates Nodemailer transporter configured with Hostinger SMTP settings
+ * Shared SMTP transport (configured from SMTP_* env vars in mail.service)
  */
 function createTransporter() {
-  const host = process.env.SMTP_HOST || "smtp.hostinger.com";
-  const port = parseInt(process.env.SMTP_PORT || "465", 10);
-  const secure = process.env.SMTP_SECURE === "true" || port === 465;
-
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    auth: {
-      user: process.env.SMTP_USER || "kashif@innotechcloud.com",
-      pass: process.env.SMTP_PASS || "",
-    },
-  });
+  return getTransporter();
 }
 
 /**

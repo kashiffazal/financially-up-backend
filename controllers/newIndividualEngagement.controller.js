@@ -29,6 +29,7 @@ const {
   generateAuditReportPDF,
 } = require("../services/individualPdf.service");
 const { sendClientSubmissionEmail, sendAdminDecisionEmail } = require("../services/individualEmail.service");
+const notificationService = require("../services/notification.service");
 const path = require("path");
 
 /** Parses a field that may arrive as a JSON string (multipart) or an array */
@@ -404,6 +405,9 @@ async function createEngagement(req, res) {
       console.error("Async PDF/Email error:", pdfErr);
     }
 
+    // Notify staff (fire-and-forget)
+    notificationService.notifySubmission("NewIndividualEngagement", engagement);
+
     return res.status(201).json({
       success: true,
       message: "Engagement form submitted successfully.",
@@ -427,8 +431,19 @@ async function createEngagement(req, res) {
  */
 async function getEngagements(req, res) {
   try {
+    // ?id=<n> → just that row, in the same shape as the list (live table updates)
+    const id = parseInt(req.query.id, 10);
     const engagements = await NewIndividualEngagement.findAll({
-      include: ["client", "services", "identity", "documents", "signatures", "adminReview"],
+      ...(id > 0 ? { where: { id } } : {}),
+      include: [
+        // Never send the raw TFN to the browser — admin screens use client.maskedTfn
+        { association: "client", attributes: { exclude: ["tfn"] } },
+        "services",
+        "identity",
+        "documents",
+        "signatures",
+        "adminReview",
+      ],
       order: [["createdAt", "DESC"]],
     });
     return res.status(200).json({
@@ -542,10 +557,14 @@ async function submitAdminDecision(req, res) {
       ipAddress: req.ip || "127.0.0.1",
     });
 
+    const previousStatus = engagement.status;
     await engagement.update({
       status: mappedStatus,
       riskLevel,
       riskNotes: reviewNotes,
+    });
+    notificationService.notifyStatusChange("NewIndividualEngagement", engagement, previousStatus, req, {
+      notes: reviewNotes || null,
     });
 
     // 4. Generate PDFs AFTER the review and status are saved, so the documents

@@ -41,7 +41,23 @@ const searchLimiter = rateLimit({
   },
 });
 
+/**
+ * Limiter for the public website contact form (anti-spam).
+ * Defaults to 5 enquiries per 15 minutes per IP address.
+ */
+const contactLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: parseInt(process.env.CONTACT_RATE_LIMIT, 10) || 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "You've sent several enquiries in a short time. Please wait a few minutes or call us directly.",
+  },
+});
+
 module.exports = {
   authLimiter,
   searchLimiter,
+  contactLimiter,
 };
