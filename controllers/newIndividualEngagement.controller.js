@@ -473,7 +473,9 @@ async function submitAdminDecision(req, res) {
       return res.status(404).json({ success: false, message: "Engagement not found." });
     }
 
-    const staffName = body.staffMemberName || body.taxAgentName || "Financially Up Tax Agent";
+    // The signer is the logged-in staff member (route requires authentication);
+    // the typed name is only a fallback for older clients
+    const staffName = req.user?.fullName || body.staffMemberName || body.taxAgentName || "Financially Up Tax Agent";
     const decision = body.decision || body.status || "Accepted";
     const riskLevel = body.riskLevel || engagement.riskLevel || "Low";
     const reviewNotes = typeof body.reviewNotes === "string" ? body.reviewNotes : (body.notes || "");

@@ -7,6 +7,7 @@
 const express = require("express");
 const router = express.Router();
 const { authenticate } = require("../middleware/authenticate");
+const { recordDeletionDisabled } = require("../middleware/recordDeletionDisabled");
 
 const {
   createEngagement,
@@ -47,7 +48,7 @@ router.post("/", upload.any(), groupFilesByField, createEngagement);
 router.get("/", authenticate, getEngagements);
 
 // Admin Record Deletion
-router.delete("/:id", authenticate, deleteEngagement);
+router.delete("/:id", authenticate, recordDeletionDisabled); // records are never deleted
 
 // Admin Decision Endpoint (Supports both PUT & POST, /decision & /admin-decision)
 router.put("/:id/decision", authenticate,

@@ -17,6 +17,7 @@
 const express = require("express");
 const router = express.Router();
 const { authenticate } = require("../middleware/authenticate");
+const { recordDeletionDisabled } = require("../middleware/recordDeletionDisabled");
 const upload = require("../middleware/upload");
 const {
   getAll,
@@ -40,6 +41,6 @@ router.post("/", upload.publicForm.any(), create);
 router.put("/:id", authenticate, update);
 
 // DELETE /api/apply-tfn-abns/:id - Delete a record
-router.delete("/:id", authenticate, remove);
+router.delete("/:id", authenticate, recordDeletionDisabled); // records are never deleted
 
 module.exports = router;

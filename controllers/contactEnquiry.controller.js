@@ -8,6 +8,7 @@
 const { ContactEnquiry } = require("../models");
 const notificationService = require("../services/notification.service");
 const { sendEnquiryStaffAlert, sendEnquiryConfirmation } = require("../services/alertEmail.service");
+const { isAuPhone, formatAuPhone } = require("../utils/auPhone");
 
 const ENQUIRY_STATUSES = ["New", "Contacted", "Closed", "Spam"];
 
@@ -18,7 +19,6 @@ const HONEYPOT_FIELD = "fu_contact_trap";
 const MIN_HUMAN_FILL_MS = 3000;
 const SOURCES = ["contact_page", "contact_modal"];
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-const PHONE_REGEX = /^[\d\s+()-]{6,20}$/;
 
 const clean = (value, max) => (typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, max) : "");
 const cleanMultiline = (value, max) => (typeof value === "string" ? value.trim().slice(0, max) : "");
@@ -65,7 +65,10 @@ const create = async (req, res) => {
     const errors = {};
     if (!data.firstName) errors.firstName = "Please enter your first name.";
     if (!EMAIL_REGEX.test(data.email)) errors.email = "Please enter a valid email address.";
-    if (data.phone && !PHONE_REGEX.test(data.phone)) errors.phone = "Please enter a valid phone number.";
+    if (data.phone) {
+      if (isAuPhone(data.phone)) data.phone = formatAuPhone(data.phone);
+      else errors.phone = "Please enter an Australian phone number, e.g. 0412 345 678 or 02 9876 5432.";
+    }
     if (Object.keys(errors).length) {
       return res.status(400).json({
         success: false,

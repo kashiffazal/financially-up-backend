@@ -120,6 +120,10 @@ const staticOptions = {
     if (filePath.endsWith(".pdf")) {
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", "inline");
+      // Generated PDFs are rebuilt under the same file name (e.g. the audit report
+      // after every review). Make browsers re-check each time (cheap 304 when the
+      // file is unchanged) instead of showing a copy cached for a day.
+      res.setHeader("Cache-Control", "no-cache");
     }
   },
 };

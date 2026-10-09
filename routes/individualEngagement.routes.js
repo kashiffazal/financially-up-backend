@@ -17,6 +17,7 @@
 const express = require("express");
 const router = express.Router();
 const { authenticate } = require("../middleware/authenticate");
+const { recordDeletionDisabled } = require("../middleware/recordDeletionDisabled");
 const {
   getAll,
   getById,
@@ -38,6 +39,6 @@ router.post("/", create);
 router.put("/:id", authenticate, update);
 
 // DELETE /api/individual-engagement/:id - Delete a record
-router.delete("/:id", authenticate, remove);
+router.delete("/:id", authenticate, recordDeletionDisabled); // records are never deleted
 
 module.exports = router;

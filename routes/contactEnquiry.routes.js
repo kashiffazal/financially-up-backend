@@ -13,6 +13,7 @@
 const express = require("express");
 const router = express.Router();
 const { authenticate } = require("../middleware/authenticate");
+const { recordDeletionDisabled } = require("../middleware/recordDeletionDisabled");
 const { authorize } = require("../middleware/authorize");
 const { contactLimiter } = require("../middleware/rateLimiter");
 const controller = require("../controllers/contactEnquiry.controller");
@@ -22,6 +23,6 @@ router.post("/", contactLimiter, controller.create);
 router.get("/", authenticate, authorize("enquiries.view"), controller.list);
 router.get("/:id", authenticate, authorize("enquiries.view"), controller.getById);
 router.put("/:id", authenticate, authorize("enquiries.manage"), controller.update);
-router.delete("/:id", authenticate, authorize("enquiries.manage"), controller.remove);
+router.delete("/:id", authenticate, authorize("enquiries.manage"), recordDeletionDisabled); // records are never deleted
 
 module.exports = router;
