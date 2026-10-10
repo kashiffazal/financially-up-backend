@@ -28,6 +28,7 @@ const roleRoutes = require("./routes/role.routes");
 const permissionRoutes = require("./routes/permission.routes");
 const auditRoutes = require("./routes/audit.routes");
 const settingRoutes = require("./routes/setting.routes");
+const departmentRoutes = require("./routes/department.routes");
 
 // Import Application Route files
 const individualEngagementRoutes = require("./routes/individualEngagement.routes");
@@ -110,7 +111,7 @@ app.use(express.json({ limit: "10mb" })); // 10mb limit to handle base64 signatu
 // Parse URL-encoded bodies
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-// Serve static uploaded files (PDFs, signatures, documents)
+// Serve uploaded files (blog images are public; everything else is protected below)
 const uploadsStaticDir = path.join(__dirname, "public/uploads");
 const staticOptions = {
   dotfiles: "ignore",
@@ -126,10 +127,16 @@ const staticOptions = {
       // Generated PDFs are rebuilt under the same file name (e.g. the audit report
       // after every review). Make browsers re-check each time (cheap 304 when the
       // file is unchanged) instead of showing a copy cached for a day.
-      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Cache-Control", "private, no-cache");
     }
   },
 };
+
+// Client files (signatures, documents, PDFs) need a signed-in staff member with
+// access to client applications; blog images stay public (middleware/protectUploads.js)
+const { protectUploads } = require("./middleware/protectUploads");
+app.use("/uploads", protectUploads);
+app.use("/api/uploads", protectUploads);
 
 app.use("/uploads", express.static(uploadsStaticDir, staticOptions));
 app.use("/api/uploads", express.static(uploadsStaticDir, staticOptions));
@@ -178,6 +185,7 @@ app.use("/api/roles", roleRoutes);
 app.use("/api/permissions", permissionRoutes);
 app.use("/api/audit-logs", auditRoutes);
 app.use("/api/settings", settingRoutes);
+app.use("/api/departments", departmentRoutes);
 
 // Operational Form and Application Routes
 app.use("/api/individual-engagement", individualEngagementRoutes);

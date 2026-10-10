@@ -87,6 +87,13 @@ const User = sequelize.define(
       allowNull: true,
       field: "last_login_ip",
     },
+    // Set when an admin chooses the password: the user must pick their own at next login
+    mustChangePassword: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      field: "must_change_password",
+    },
   },
   {
     tableName: "user_main",

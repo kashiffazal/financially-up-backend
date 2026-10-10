@@ -12,6 +12,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { embedSignatures, pdfServiceHeaders } = require("../utils/pdfServiceRequest");
 const NewCompanyPdf = require("../models/NewCompanyPdf");
 
 /**
@@ -47,10 +48,11 @@ async function renderCompanyPdfViaPhp(type, data, fullPath, fileName, relPath, e
   try {
     const response = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: pdfServiceHeaders(),
       body: JSON.stringify({
         type,
-        data,
+        // Signature images travel inside the request (the PHP server can't read this disk)
+        data: embedSignatures(data),
         savePath: fullPath,
         fileName,
         relPath,
@@ -98,7 +100,7 @@ async function renderHtmlToPdf(htmlContent, fullPath, title = "Company Registrat
   try {
     const response = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: pdfServiceHeaders(),
       body: JSON.stringify({
         html: htmlContent,
         title,

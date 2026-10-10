@@ -7,6 +7,7 @@
 const express = require("express");
 const router = express.Router();
 const { authenticate } = require("../middleware/authenticate");
+const { authorizeModule } = require("../middleware/authorize");
 const { recordDeletionDisabled } = require("../middleware/recordDeletionDisabled");
 
 const {
@@ -45,25 +46,25 @@ const groupFilesByField = (req, res, next) => {
 router.post("/", upload.any(), groupFilesByField, createEngagement);
 
 // Admin APIs (/admin/individual-engagement-new)
-router.get("/", authenticate, getEngagements);
+router.get("/", authenticate, authorizeModule("new-individual", "view"), getEngagements);
 
 // Admin Record Deletion
-router.delete("/:id", authenticate, recordDeletionDisabled); // records are never deleted
+router.delete("/:id", authenticate, authorizeModule("new-individual", "manage"), recordDeletionDisabled); // records are never deleted
 
 // Admin Decision Endpoint (Supports both PUT & POST, /decision & /admin-decision)
-router.put("/:id/decision", authenticate,
+router.put("/:id/decision", authenticate, authorizeModule("new-individual", "manage"),
   upload.fields([{ name: "staffUploadedSignature", maxCount: 1 }]),
   submitAdminDecision
 );
-router.post("/:id/decision", authenticate,
+router.post("/:id/decision", authenticate, authorizeModule("new-individual", "manage"),
   upload.fields([{ name: "staffUploadedSignature", maxCount: 1 }]),
   submitAdminDecision
 );
-router.put("/:id/admin-decision", authenticate,
+router.put("/:id/admin-decision", authenticate, authorizeModule("new-individual", "manage"),
   upload.fields([{ name: "staffUploadedSignature", maxCount: 1 }]),
   submitAdminDecision
 );
-router.post("/:id/admin-decision", authenticate,
+router.post("/:id/admin-decision", authenticate, authorizeModule("new-individual", "manage"),
   upload.fields([{ name: "staffUploadedSignature", maxCount: 1 }]),
   submitAdminDecision
 );

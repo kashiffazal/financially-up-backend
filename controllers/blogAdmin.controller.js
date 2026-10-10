@@ -432,18 +432,55 @@ const updateCategory = async (req, res) => {
  * DELETE /api/blog-admin/categories/:id
  * Posts keep their other categories; sub-categories move up to this category's parent.
  */
+/**
+ * Move every post from one category / tag to another before the first is deleted.
+ * Posts that already have the replacement keep a single link. Returns the number of posts.
+ */
+const reassignTerm = async (LinkModel, field, fromId, toId, transaction) => {
+  const links = await LinkModel.findAll({ where: { [field]: fromId }, attributes: ["postId"], raw: true, transaction });
+  if (toId && links.length) {
+    const existing = await LinkModel.findAll({
+      where: { [field]: toId, postId: { [Op.in]: links.map((l) => l.postId) } },
+      attributes: ["postId"],
+      raw: true,
+      transaction,
+    });
+    const already = new Set(existing.map((l) => l.postId));
+    const toAdd = links.filter((l) => !already.has(l.postId)).map((l) => ({ postId: l.postId, [field]: toId }));
+    if (toAdd.length) await LinkModel.bulkCreate(toAdd, { transaction });
+  }
+  await LinkModel.destroy({ where: { [field]: fromId }, transaction });
+  return links.length;
+};
+
+/**
+ * DELETE /api/blog-admin/categories/:id   (?replaceWith=<categoryId>)
+ * Posts in the category are moved to `replaceWith`, or simply lose this category.
+ * Sub-categories move up to the deleted category's parent.
+ */
 const deleteCategory = async (req, res) => {
   try {
     const category = await BlogCategory.findByPk(req.params.id);
     if (!category) return res.status(404).json({ success: false, message: "Category not found." });
+    const replaceWithId = Number(req.query.replaceWith || req.body?.replaceWith) || null;
+    const replacement = replaceWithId ? await BlogCategory.findByPk(replaceWithId) : null;
+    if (replaceWithId && (!replacement || replacement.id === category.id)) {
+      return res.status(400).json({ success: false, message: "Choose another category to move the posts to." });
+    }
+    let affected = 0;
     await sequelize.transaction(async (transaction) => {
       await BlogCategory.update({ parentId: category.parentId }, { where: { parentId: category.id }, transaction });
-      await BlogPostCategory.destroy({ where: { categoryId: category.id }, transaction });
+      affected = await reassignTerm(BlogPostCategory, "categoryId", category.id, replacement?.id, transaction);
       await category.destroy({ transaction });
     });
-    await audit(req, "DELETE", "blog_category", category.id, `Deleted category "${category.name}"`);
+    const outcome = !affected
+      ? ""
+      : replacement
+        ? ` ${affected} post${affected === 1 ? "" : "s"} moved to "${replacement.name}".`
+        : ` Removed from ${affected} post${affected === 1 ? "" : "s"}.`;
+    await audit(req, "DELETE", "blog_category", category.id, `Deleted category "${category.name}".${outcome}`);
     refreshWebsiteBlog();
-    return res.status(200).json({ success: true, message: "Category deleted." });
+    return res.status(200).json({ success: true, message: `Category deleted.${outcome}` });
   } catch (error) {
     return sendError(res, error, "Failed to delete category");
   }
@@ -503,17 +540,32 @@ const updateTag = async (req, res) => {
 };
 
 /** DELETE /api/blog-admin/tags/:id (removed from all posts) */
+/**
+ * DELETE /api/blog-admin/tags/:id   (?replaceWith=<tagId>)
+ * Posts with the tag get `replaceWith` instead, or simply lose this tag.
+ */
 const deleteTag = async (req, res) => {
   try {
     const tag = await BlogTag.findByPk(req.params.id);
     if (!tag) return res.status(404).json({ success: false, message: "Tag not found." });
+    const replaceWithId = Number(req.query.replaceWith || req.body?.replaceWith) || null;
+    const replacement = replaceWithId ? await BlogTag.findByPk(replaceWithId) : null;
+    if (replaceWithId && (!replacement || replacement.id === tag.id)) {
+      return res.status(400).json({ success: false, message: "Choose another tag to give these posts." });
+    }
+    let affected = 0;
     await sequelize.transaction(async (transaction) => {
-      await BlogPostTag.destroy({ where: { tagId: tag.id }, transaction });
+      affected = await reassignTerm(BlogPostTag, "tagId", tag.id, replacement?.id, transaction);
       await tag.destroy({ transaction });
     });
-    await audit(req, "DELETE", "blog_tag", tag.id, `Deleted tag "${tag.name}"`);
+    const outcome = !affected
+      ? ""
+      : replacement
+        ? ` ${affected} post${affected === 1 ? "" : "s"} now tagged "${replacement.name}".`
+        : ` Removed from ${affected} post${affected === 1 ? "" : "s"}.`;
+    await audit(req, "DELETE", "blog_tag", tag.id, `Deleted tag "${tag.name}".${outcome}`);
     refreshWebsiteBlog();
-    return res.status(200).json({ success: true, message: "Tag deleted." });
+    return res.status(200).json({ success: true, message: `Tag deleted.${outcome}` });
   } catch (error) {
     return sendError(res, error, "Failed to delete tag");
   }

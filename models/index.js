@@ -22,6 +22,7 @@ const Notification = require("./Notification");
 const NotificationRead = require("./NotificationRead");
 const ContactEnquiry = require("./ContactEnquiry");
 const NewsletterSubscriber = require("./NewsletterSubscriber");
+const PasswordToken = require("./PasswordToken");
 
 // ============================
 // Blog (website /blog, managed at /admin/blog)
@@ -221,6 +222,7 @@ module.exports = {
   NotificationRead,
   ContactEnquiry,
   NewsletterSubscriber,
+  PasswordToken,
   // Blog
   BlogPost,
   BlogCategory,

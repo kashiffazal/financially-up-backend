@@ -23,6 +23,9 @@ const hashSessionToken = (token) => {
   return crypto.createHash("sha256").update(token).digest("hex");
 };
 
+// Endpoints still allowed while a user must change their password
+const PASSWORD_CHANGE_ALLOWED = ["/api/auth/me", "/api/auth/change-password", "/api/auth/logout"];
+
 const authenticate = async (req, res, next) => {
   try {
     let token = null;
@@ -135,6 +138,7 @@ const authenticate = async (req, res, next) => {
       avatar: user.avatar,
       bio: user.bio,
       status: user.status,
+      mustChangePassword: Boolean(user.mustChangePassword),
       roles: (user.roles || []).map((r) => ({
         id: r.id,
         name: r.name,
@@ -146,6 +150,15 @@ const authenticate = async (req, res, next) => {
 
     req.session = sessionRecord;
     req.permissions = permissions;
+
+    // A password set by an admin must be replaced before anything else can be used
+    if (user.mustChangePassword && !PASSWORD_CHANGE_ALLOWED.some((p) => (req.originalUrl || "").split("?")[0].endsWith(p))) {
+      return res.status(403).json({
+        success: false,
+        code: "PASSWORD_CHANGE_REQUIRED",
+        message: "Please choose a new password before continuing.",
+      });
+    }
 
     next();
   } catch (error) {

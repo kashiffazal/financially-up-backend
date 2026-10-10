@@ -31,6 +31,23 @@ const DEFAULT_SETTINGS = [
   /* ─── Application URLs ─── */
   { key: "url.website", value: "https://financiallyup.com.au", label: "Public Website URL", group: "url", inputType: "url", sortOrder: 1 },
   { key: "url.api", value: "https://api-financiallyup.innotechcloud.online", label: "API Base URL", group: "url", inputType: "url", sortOrder: 2, helpText: "Used to build absolute links to uploaded files in PDFs" },
+  // Staff departments (list shown in the Add / Edit User and Profile forms), stored as a JSON array
+  {
+    key: "staff.departments",
+    value: JSON.stringify([
+      "Taxation & Accounting",
+      "Corporate Advisory",
+      "Audit & Assurance",
+      "Compliance & ASIC",
+      "Bookkeeping & Payroll",
+      "Practice Administration",
+    ]),
+    label: "Departments",
+    group: "staff",
+    inputType: "list",
+    sortOrder: 1,
+    helpText: "Type a department and press Enter to add it; click × to remove one. Existing staff keep their current department.",
+  },
   { key: "url.adminPortal", value: "https://financiallyup.innotechcloud.online/admin", label: "Admin Portal URL", group: "url", inputType: "url", sortOrder: 3 },
 ];
 

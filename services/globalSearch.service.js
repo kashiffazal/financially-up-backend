@@ -15,6 +15,7 @@
 
 const { Op, fn, col, where: sqlWhere } = require("sequelize");
 const models = require("../models");
+const { canAccessModule, viewPermissionOf } = require("../utils/modulePermissions");
 
 // ============================
 // Module Registry
@@ -353,6 +354,12 @@ const SEARCH_REGISTRY = [
     urlOf: (r) => `/admin/blog/${r.id}`,
   },
 ];
+
+// Each module's permission comes from the shared map (utils/modulePermissions.js);
+// it is also the permission stored on that module's notifications.
+SEARCH_REGISTRY.forEach((m) => {
+  m.permission = viewPermissionOf(m.key) || m.permission;
+});
 
 // ============================
 // Query Interpretation
@@ -721,7 +728,8 @@ const globalSearch = async (rawQuery, { perModule = 5, permissions = [], isSuper
   }
 
   const visibleModules = SEARCH_REGISTRY.filter(
-    (m) => isSuperAdmin || !m.permission || permissions.includes(m.permission)
+    // Current or older permission names both count (see utils/modulePermissions.js)
+    (m) => isSuperAdmin || canAccessModule(permissions, m.key, "view")
   );
 
   // A legacy reference only needs its own module

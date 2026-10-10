@@ -8,7 +8,8 @@
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { User, Role, Session, Permission } = require("../models");
-const { verifyPassword, hashPassword } = require("../utils/password");
+const { verifyPassword, hashPassword, passwordProblem } = require("../utils/password");
+const passwordLinks = require("../services/passwordToken.service");
 const { hashSessionToken } = require("../middleware/authenticate");
 const auditService = require("../services/audit.service");
 const permissionService = require("../services/permission.service");
@@ -187,6 +188,7 @@ const login = async (req, res) => {
         bio: user.bio,
         avatar: user.avatar,
         status: user.status,
+        mustChangePassword: Boolean(user.mustChangePassword),
         roles: (user.roles || []).map((r) => ({
           id: r.id,
           name: r.name,
@@ -365,11 +367,12 @@ const changePassword = async (req, res) => {
       });
     }
 
-    if (newPassword.length < 6) {
-      return res.status(400).json({
-        success: false,
-        message: "New password must be at least 6 characters long.",
-      });
+    const weakness = passwordProblem(newPassword);
+    if (weakness) {
+      return res.status(400).json({ success: false, message: weakness });
+    }
+    if (newPassword === currentPassword) {
+      return res.status(400).json({ success: false, message: "Choose a password that's different from the current one." });
     }
 
     const user = await User.findByPk(req.user.id);
@@ -398,7 +401,8 @@ const changePassword = async (req, res) => {
 
     // 2. Hash new password with Argon2id
     const newHash = await hashPassword(newPassword);
-    await user.update({ passwordHash: newHash });
+    // A temporary password set by an admin is now replaced
+    await user.update({ passwordHash: newHash, mustChangePassword: false });
 
     // 3. Revoke all OTHER sessions except current one for account protection
     const { Op } = require("sequelize");
@@ -525,7 +529,101 @@ const revokeMySession = async (req, res) => {
   }
 };
 
+// ============================
+// Password links (public)
+// ============================
+
+const GENERIC_FORGOT_REPLY = "If an active staff account uses that email, a reset link is on its way. Check your inbox (and spam folder).";
+
+/**
+ * POST /api/auth/forgot-password  { email }
+ * Always gives the same reply, so it never reveals which emails have accounts.
+ */
+const forgotPassword = async (req, res) => {
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+    return res.status(400).json({ success: false, message: "Please enter a valid email address." });
+  }
+  try {
+    const user = await User.findOne({ where: { email } });
+    if (user && user.status === "Active") {
+      await passwordLinks.issueAndEmail(user, "reset", { requestIp: req.ip });
+      await auditService.log({
+        actorUserId: user.id,
+        targetUserId: user.id,
+        action: "PASSWORD_RESET_REQUESTED",
+        module: "auth",
+        description: `Password reset link emailed to ${user.email} (forgot password)`,
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"],
+      });
+    }
+  } catch (error) {
+    // Logged only: the reply stays the same either way
+    console.error("[Auth] forgotPassword error:", error.message);
+  }
+  return res.status(200).json({ success: true, message: GENERIC_FORGOT_REPLY });
+};
+
+/**
+ * GET /api/auth/password-token/:token
+ * Checks a link before showing the "set password" form.
+ */
+const checkPasswordToken = async (req, res) => {
+  const found = await passwordLinks.findValidToken(req.params.token).catch(() => null);
+  if (!found) {
+    return res.status(400).json({
+      success: false,
+      message: "This link is invalid or has expired. Ask your administrator for a new one, or use Forgot password on the login page.",
+    });
+  }
+  return res.status(200).json({
+    success: true,
+    data: { purpose: found.record.purpose, email: found.user.email, firstName: found.user.firstName },
+  });
+};
+
+/**
+ * POST /api/auth/set-password  { token, password }
+ * Sets the password from an emailed link, then signs the user out everywhere.
+ */
+const setPasswordWithToken = async (req, res) => {
+  const { token, password } = req.body || {};
+  try {
+    const found = await passwordLinks.findValidToken(token);
+    if (!found) {
+      return res.status(400).json({
+        success: false,
+        message: "This link is invalid or has expired. Ask your administrator for a new one, or use Forgot password on the login page.",
+      });
+    }
+    const weakness = passwordProblem(password);
+    if (weakness) return res.status(400).json({ success: false, message: weakness });
+
+    const { record, user } = found;
+    await user.update({ passwordHash: await hashPassword(password), mustChangePassword: false });
+    await passwordLinks.consumeToken(record);
+    await Session.update({ revokedAt: new Date() }, { where: { userId: user.id, revokedAt: null } });
+    await auditService.log({
+      actorUserId: user.id,
+      targetUserId: user.id,
+      action: record.purpose === "setup" ? "PASSWORD_SET" : "PASSWORD_RESET",
+      module: "auth",
+      description: `${user.email} ${record.purpose === "setup" ? "set their password from the welcome email" : "reset their password from an emailed link"}`,
+      ipAddress: req.ip,
+      userAgent: req.headers["user-agent"],
+    });
+    return res.status(200).json({ success: true, message: "Your password has been set. You can now sign in." });
+  } catch (error) {
+    console.error("[Auth] setPasswordWithToken error:", error);
+    return res.status(500).json({ success: false, message: "Couldn't set your password. Please try again." });
+  }
+};
+
 module.exports = {
+  forgotPassword,
+  checkPasswordToken,
+  setPasswordWithToken,
   login,
   logout,
   getMe,

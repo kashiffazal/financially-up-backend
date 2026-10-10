@@ -100,6 +100,8 @@ const initDatabase = async (retries = 3, delayMs = 3000) => {
         await sequelize.query("ALTER TABLE new_individual_engagements ADD COLUMN tfnExplanation TEXT NULL").catch(() => {});
         await sequelize.query("ALTER TABLE new_individual_engagements ADD COLUMN incomeActivities JSON NULL").catch(() => {});
         await sequelize.query("ALTER TABLE new_individual_engagements ADD COLUMN basScope VARCHAR(100) NULL").catch(() => {});
+        // Users: forced password change after an admin sets the password
+        await sequelize.query("ALTER TABLE user_main ADD COLUMN must_change_password TINYINT(1) NOT NULL DEFAULT 0").catch(() => {});
         // Declined consents are recorded with a NULL acceptedAt
         await sequelize.query("ALTER TABLE new_individual_consents MODIFY COLUMN acceptedAt DATETIME NULL").catch(() => {});
 
@@ -161,6 +163,14 @@ const initDatabase = async (retries = 3, delayMs = 3000) => {
         await seedBlogBatch2();
       } catch (blogSeedError) {
         console.error("Blog seed failed (blog still works, posts can be added in the admin):", blogSeedError.message);
+      }
+
+      // Notifications only reach staff allowed to see their module
+      try {
+        const { alignNotificationPermissions } = require("./services/notification.service");
+        await alignNotificationPermissions();
+      } catch (alignError) {
+        console.error("Notification permission clean-up failed:", alignError.message);
       }
       console.log("✅ Global settings seeding completed.");
       return;

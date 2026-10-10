@@ -1,3 +1,5 @@
+const { MODULE_PERMISSIONS, canAccessModule } = require("../utils/modulePermissions");
+
 /**
  * Authorization Middleware
  * ========================
@@ -87,8 +89,30 @@ const authorizeAll = (permissionSlugs = []) => {
   };
 };
 
+/**
+ * Module access guard: allows the request when the user may `level` the module
+ * ("view" or "manage"), using the shared map in utils/modulePermissions.js
+ * (current + older permission names).
+ *
+ * @param {string} moduleKey - e.g. "gst", "new-individual"
+ * @param {"view"|"manage"} level
+ */
+const authorizeModule = (moduleKey, level = "view") => {
+  if (!MODULE_PERMISSIONS[moduleKey]) throw new Error(`authorizeModule: unknown module "${moduleKey}"`);
+  return (req, res, next) => {
+    if (!req.user || !req.permissions) {
+      return res.status(401).json({ success: false, message: "Authentication required." });
+    }
+    if (!canAccessModule(req.permissions, moduleKey, level)) {
+      return res.status(403).json({ success: false, message: "You do not have permission to perform this action." });
+    }
+    next();
+  };
+};
+
 module.exports = {
   authorize,
   authorizeAny,
   authorizeAll,
+  authorizeModule,
 };

@@ -9,10 +9,15 @@ const express = require("express");
 const router = express.Router();
 const authController = require("../controllers/auth.controller");
 const { authenticate } = require("../middleware/authenticate");
-const { authLimiter } = require("../middleware/rateLimiter");
+const { authLimiter, passwordLinkLimiter } = require("../middleware/rateLimiter");
 
 // Public endpoints
 router.post("/login", authLimiter, authController.login);
+
+// Password links: "Forgot password" + the emailed "set / reset your password" page
+router.post("/forgot-password", passwordLinkLimiter, authController.forgotPassword);
+router.get("/password-token/:token", authController.checkPasswordToken);
+router.post("/set-password", passwordLinkLimiter, authController.setPasswordWithToken);
 
 // Protected endpoints (Session / Token required)
 router.post("/logout", authenticate, authController.logout);

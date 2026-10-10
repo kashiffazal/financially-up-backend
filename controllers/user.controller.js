@@ -7,7 +7,39 @@
 
 const { Op } = require("sequelize");
 const { User, Role, UserRole, Session, AuditLog, sequelize } = require("../models");
-const { hashPassword } = require("../utils/password");
+const crypto = require("crypto");
+const { hashPassword, passwordProblem } = require("../utils/password");
+const passwordLinks = require("../services/passwordToken.service");
+
+// ============================
+// Lock-out protection
+// ============================
+
+const ADMIN_ROLE_SLUG = "administrator";
+const isSelf = (req, user) => String(req.user?.id) === String(user.id);
+
+/** Does this user currently hold the Administrator role? */
+const hasAdminRole = async (userId, transaction) => {
+  const adminRole = await Role.findOne({ where: { slug: ADMIN_ROLE_SLUG }, transaction });
+  if (!adminRole) return false;
+  return Boolean(await UserRole.findOne({ where: { userId, roleId: adminRole.id }, transaction }));
+};
+
+/** True when `userId` is the only active user with the Administrator role. */
+const isLastActiveAdmin = async (userId, transaction) => {
+  const adminRole = await Role.findOne({ where: { slug: ADMIN_ROLE_SLUG }, transaction });
+  if (!adminRole || !(await hasAdminRole(userId, transaction))) return false;
+  const links = await UserRole.findAll({ where: { roleId: adminRole.id }, attributes: ["userId"], raw: true, transaction });
+  const otherIds = links.map((l) => l.userId).filter((id) => String(id) !== String(userId));
+  if (!otherIds.length) return true;
+  const others = await User.count({ where: { id: { [Op.in]: otherIds }, status: "Active" }, transaction });
+  return others === 0;
+};
+
+const LAST_ADMIN_MESSAGE = "This is the only active Administrator. Give another user the Administrator role first, so the portal is never left without one.";
+
+/** Password nobody knows: used until the user sets their own from the emailed link. */
+const unusablePassword = () => crypto.randomBytes(32).toString("base64url");
 const auditService = require("../services/audit.service");
 const permissionService = require("../services/permission.service");
 
@@ -101,7 +133,12 @@ const getUsers = async (req, res) => {
 
 /**
  * POST /api/users
- * Create a new user account with Argon2id password hash and initial role assignment.
+ * Create a new user account and assign roles.
+ *
+ * passwordMode:
+ *   "email"  (default) - the user gets a "Set your password" email (link valid 48 hours);
+ *                        no password is typed or shared by the admin
+ *   "manual"           - the admin sets `password`; the user must change it at first login
  */
 const createUser = async (req, res) => {
   const {
@@ -116,25 +153,27 @@ const createUser = async (req, res) => {
     avatar,
     status = "Active",
     roleIds = [],
+    passwordMode = "email",
   } = req.body;
+  const sendLink = passwordMode !== "manual";
 
   const t = await sequelize.transaction();
 
   try {
-    if (!email || !password || !firstName || !lastName) {
+    if (!email || !firstName || !lastName) {
       await t.rollback();
       return res.status(400).json({
         success: false,
-        message: "Email, password, first name, and last name are required.",
+        message: "Email, first name, and last name are required.",
       });
     }
 
-    if (password.length < 6) {
-      await t.rollback();
-      return res.status(400).json({
-        success: false,
-        message: "Password must be at least 6 characters long.",
-      });
+    if (!sendLink) {
+      const weakness = passwordProblem(password);
+      if (weakness) {
+        await t.rollback();
+        return res.status(400).json({ success: false, message: weakness });
+      }
     }
 
     // Check unique email
@@ -150,8 +189,8 @@ const createUser = async (req, res) => {
       });
     }
 
-    // Hash password with Argon2id
-    const passwordHash = await hashPassword(password);
+    // Emailed link: nobody knows the password until the user sets it
+    const passwordHash = await hashPassword(sendLink ? unusablePassword() : password);
 
     // Create user
     const newUser = await User.create(
@@ -167,6 +206,8 @@ const createUser = async (req, res) => {
         avatar: avatar || null,
         status: ["Active", "Inactive", "Suspended"].includes(status) ? status : "Active",
         emailVerifiedAt: new Date(),
+        // A password chosen by the admin must be replaced at first login
+        mustChangePassword: !sendLink,
       },
       { transaction: t }
     );
@@ -207,6 +248,18 @@ const createUser = async (req, res) => {
       status: "SUCCESS",
     });
 
+    // Welcome email with the "Set my password" link (after the account is saved;
+    // if it fails the account stays and the admin can resend from the Users list)
+    let emailSent = false;
+    if (sendLink) {
+      try {
+        await passwordLinks.issueAndEmail(newUser, "setup", { createdByUserId: req.user.id, requestIp: req.ip });
+        emailSent = true;
+      } catch (mailError) {
+        console.error("[Users] Welcome email failed:", mailError.message);
+      }
+    }
+
     // Load with roles to return
     const createdWithRoles = await User.findByPk(newUser.id, {
       include: [{ model: Role, as: "roles", through: { attributes: [] } }],
@@ -215,7 +268,12 @@ const createUser = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: "User created successfully.",
+      message: !sendLink
+        ? "User created. They'll be asked to choose their own password when they first sign in."
+        : emailSent
+          ? `User created. A "Set your password" email was sent to ${newUser.email}.`
+          : "User created, but the welcome email couldn't be sent. Use Reset Password > Send email to try again.",
+      emailSent,
       user: createdWithRoles,
     });
   } catch (error) {
@@ -282,6 +340,16 @@ const updateUser = async (req, res) => {
     const user = await User.findByPk(id);
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found." });
+    }
+
+    // Status changes that would lock people out
+    if (status && status !== user.status && status !== "Active") {
+      if (isSelf(req, user)) {
+        return res.status(400).json({ success: false, message: "You can't deactivate your own account." });
+      }
+      if (await isLastActiveAdmin(user.id)) {
+        return res.status(400).json({ success: false, message: LAST_ADMIN_MESSAGE });
+      }
     }
 
     const beforeData = {
@@ -381,11 +449,15 @@ const updateUserStatus = async (req, res) => {
     }
 
     // Prevent disabling self
-    if (user.id === req.user.id && status !== "Active") {
+    if (isSelf(req, user) && status !== "Active") {
       return res.status(400).json({
         success: false,
         message: "You cannot disable your own active account.",
       });
+    }
+    // ...or the last active Administrator
+    if (status !== "Active" && (await isLastActiveAdmin(user.id))) {
+      return res.status(400).json({ success: false, message: LAST_ADMIN_MESSAGE });
     }
 
     const oldStatus = user.status;
@@ -451,6 +523,19 @@ const updateUserRoles = async (req, res) => {
 
     const previousRoleIds = (user.roles || []).map((r) => r.id);
 
+    // Your own roles are changed by another administrator (prevents locking yourself out)
+    if (isSelf(req, user)) {
+      await t.rollback();
+      return res.status(400).json({ success: false, message: "You can't change your own roles. Ask another administrator." });
+    }
+    // Removing the Administrator role from the last active Administrator
+    const adminRole = await Role.findOne({ where: { slug: ADMIN_ROLE_SLUG }, transaction: t });
+    const keepsAdmin = adminRole && (roleIds || []).map(String).includes(String(adminRole.id));
+    if (adminRole && !keepsAdmin && (await isLastActiveAdmin(user.id, t))) {
+      await t.rollback();
+      return res.status(400).json({ success: false, message: LAST_ADMIN_MESSAGE });
+    }
+
     // Delete current roles
     await UserRole.destroy({ where: { userId: user.id }, transaction: t });
 
@@ -502,27 +587,42 @@ const updateUserRoles = async (req, res) => {
 
 /**
  * POST /api/users/:id/reset-password
- * Administrative password reset for user account with Argon2id.
+ * { mode: "email" }                    - email a reset link (valid 48 hours); the
+ *                                        current password keeps working until it's used
+ * { mode: "manual", newPassword }      - set a password the user must change at next login
+ * Either way the user is signed out of every device.
  */
 const resetUserPassword = async (req, res) => {
   const { id } = req.params;
-  const { newPassword } = req.body;
+  const { newPassword, mode = "manual" } = req.body;
+  const sendLink = mode === "email";
 
   try {
-    if (!newPassword || newPassword.length < 6) {
-      return res.status(400).json({
-        success: false,
-        message: "New password must be at least 6 characters long.",
-      });
+    if (!sendLink) {
+      const weakness = passwordProblem(newPassword);
+      if (weakness) return res.status(400).json({ success: false, message: weakness });
     }
 
     const user = await User.findByPk(id);
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found." });
     }
+    if (isSelf(req, user)) {
+      return res.status(400).json({ success: false, message: "Change your own password from My Profile > Security & Password." });
+    }
 
-    const passwordHash = await hashPassword(newPassword);
-    await user.update({ passwordHash });
+    if (sendLink) {
+      try {
+        await passwordLinks.issueAndEmail(user, "setup", { createdByUserId: req.user.id, requestIp: req.ip });
+      } catch (mailError) {
+        console.error("[Users] Reset email failed:", mailError.message);
+        return res.status(502).json({ success: false, message: "The email couldn't be sent. Check the email (SMTP) settings and try again." });
+      }
+    } else {
+      const passwordHash = await hashPassword(newPassword);
+      await user.update({ passwordHash, mustChangePassword: true });
+      await passwordLinks.cancelOpenTokens(user.id);
+    }
 
     // Revoke all active sessions for target user
     await Session.update(
@@ -537,7 +637,9 @@ const resetUserPassword = async (req, res) => {
       module: "users",
       resourceType: "User",
       resourceId: user.id,
-      description: `Admin ${req.user.email} reset password for user ${user.email}`,
+      description: sendLink
+        ? `Admin ${req.user.email} emailed a password reset link to ${user.email}`
+        : `Admin ${req.user.email} set a temporary password for ${user.email} (must change at next login)`,
       ipAddress: req.ip,
       userAgent: req.headers["user-agent"],
       status: "SUCCESS",
@@ -545,7 +647,9 @@ const resetUserPassword = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Password reset successfully. User sessions have been invalidated.",
+      message: sendLink
+        ? `A password reset link was emailed to ${user.email}. They've been signed out of all devices.`
+        : "Temporary password set. The user must choose a new one at next sign-in and has been signed out of all devices.",
     });
   } catch (error) {
     console.error("resetUserPassword error:", error);

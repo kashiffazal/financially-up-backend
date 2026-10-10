@@ -12,6 +12,7 @@
 const { Op, literal } = require("sequelize");
 const models = require("../models");
 const { MODULES_BY_KEY, notificationBus } = require("../services/notification.service");
+const { withModuleViewSlugs } = require("../utils/modulePermissions");
 
 const HEARTBEAT_MS = 25000;
 
@@ -30,7 +31,7 @@ const visibilityConditions = (req) => {
   const conditions = [{ [Op.or]: [{ actorUserId: null }, { actorUserId: { [Op.ne]: userId } }] }];
   if (!isSuperAdmin(req)) {
     conditions.push({
-      [Op.or]: [{ permission: null }, { permission: { [Op.in]: req.permissions || [] } }],
+      [Op.or]: [{ permission: null }, { permission: { [Op.in]: withModuleViewSlugs(req.permissions || []) } }],
     });
   }
   return conditions;
@@ -375,7 +376,7 @@ const dismissAll = async (req, res) => {
 const stream = (req, res) => {
   const userId = Number(req.user.id);
   const admin = isSuperAdmin(req);
-  const permissions = new Set(req.permissions || []);
+  const permissions = new Set(withModuleViewSlugs(req.permissions || []));
 
   res.status(200).set({
     "Content-Type": "text/event-stream; charset=utf-8",

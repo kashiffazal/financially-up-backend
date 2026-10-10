@@ -4,6 +4,11 @@
  * Provides aggregated practice metrics, module submission counts,
  * status distributions, daily activity trend curves, and recent submissions
  * for the Practice Operations Dashboard.
+ *
+ * Every number and list is limited to the modules the signed-in user may view
+ * (utils/modulePermissions.js); staff / session / audit figures need users.view
+ * or audit.view. `access` and `modules` tell the admin panel what to show —
+ * staff without any application access get a welcome dashboard of their own areas.
  */
 
 const { Op } = require("sequelize");
@@ -28,7 +33,48 @@ const {
   SmsfRegistration,
   BusinessNameRegistration,
   ApplyTfnAbns,
+  BlogPost,
+  ContactEnquiry,
+  NewsletterSubscriber,
 } = require("../models");
+const { canAccessModule, APPLICATION_MODULE_KEYS } = require("../utils/modulePermissions");
+
+/** Count only when the user may view the module (0 otherwise, without querying). */
+const countIf = (allowed, Model, options) => (allowed && Model ? Model.count(options).catch(() => 0) : 0);
+
+/** Blog / Enquiries / Newsletter summaries for the areas the user can access. */
+const otherModuleSummaries = async (permissions) => {
+  const now = new Date();
+  const modules = {};
+  if (permissions.includes("blog.view") && BlogPost) {
+    const [published, scheduled, drafts, trash] = await Promise.all([
+      BlogPost.count({ where: { status: "published", publishedAt: { [Op.lte]: now } } }),
+      BlogPost.count({ where: { status: "published", publishedAt: { [Op.gt]: now } } }),
+      BlogPost.count({ where: { status: "draft" } }),
+      BlogPost.count({ where: { status: "trash" } }),
+    ]);
+    const recent = await BlogPost.findAll({
+      where: { status: { [Op.ne]: "trash" } },
+      attributes: ["id", "title", "status", "publishedAt", "updatedAt"],
+      order: [["updatedAt", "DESC"]],
+      limit: 5,
+      raw: true,
+    });
+    modules.blog = { published, scheduled, drafts, trash, total: published + scheduled + drafts, recent };
+  }
+  if (permissions.includes("enquiries.view") && ContactEnquiry) {
+    const [newCount, total] = await Promise.all([ContactEnquiry.count({ where: { status: "New" } }), ContactEnquiry.count()]);
+    modules.enquiries = { new: newCount, total };
+  }
+  if (permissions.includes("newsletter.view") && NewsletterSubscriber) {
+    const [subscribed, total] = await Promise.all([
+      NewsletterSubscriber.count({ where: { status: "Subscribed" } }),
+      NewsletterSubscriber.count(),
+    ]);
+    modules.newsletter = { subscribed, total };
+  }
+  return modules;
+};
 
 /**
  * GET /api/dashboard/stats
@@ -36,6 +82,10 @@ const {
  */
 const getDashboardStats = async (req, res) => {
   const { range = "7D" } = req.query;
+  const permissions = req.permissions || [];
+  const can = (moduleKey) => canAccessModule(permissions, moduleKey, "view");
+  const canSeeTeam = permissions.includes("users.view") || permissions.includes("audit.view");
+  const hasApplicationAccess = APPLICATION_MODULE_KEYS.some(can);
 
   try {
     // 1. Calculate Date Range Window
@@ -64,21 +114,21 @@ const getDashboardStats = async (req, res) => {
       activeSessionsCount,
       totalAuditLogsCount,
     ] = await Promise.all([
-      NewCompanyRegistration.count().catch(() => 0),
-      NewIndividualEngagement.count().catch(() => 0),
-      CompanyRegistration ? CompanyRegistration.count().catch(() => 0) : 0,
-      IndividualEngagement ? IndividualEngagement.count().catch(() => 0) : 0,
-      GstRegistration ? GstRegistration.count().catch(() => 0) : 0,
-      Medicare ? Medicare.count().catch(() => 0) : 0,
-      TrustRegistration ? TrustRegistration.count().catch(() => 0) : 0,
-      SmsfRegistration ? SmsfRegistration.count().catch(() => 0) : 0,
-      BusinessNameRegistration ? BusinessNameRegistration.count().catch(() => 0) : 0,
-      ApplyTfnAbns ? ApplyTfnAbns.count().catch(() => 0) : 0,
-      ChangesToCompanyDetails ? ChangesToCompanyDetails.count().catch(() => 0) : 0,
-      EntityEngagement ? EntityEngagement.count().catch(() => 0) : 0,
-      User.count({ where: { status: "Active" } }).catch(() => 0),
-      Session.count({ where: { revokedAt: null } }).catch(() => 0),
-      AuditLog.count().catch(() => 0),
+      countIf(can("new-company"), NewCompanyRegistration),
+      countIf(can("new-individual"), NewIndividualEngagement),
+      countIf(can("legacy-company"), CompanyRegistration),
+      countIf(can("legacy-individual"), IndividualEngagement),
+      countIf(can("gst"), GstRegistration),
+      countIf(can("medicare"), Medicare),
+      countIf(can("trust"), TrustRegistration),
+      countIf(can("smsf"), SmsfRegistration),
+      countIf(can("business-names"), BusinessNameRegistration),
+      countIf(can("apply-tfn"), ApplyTfnAbns),
+      countIf(can("changes-company"), ChangesToCompanyDetails),
+      countIf(can("entity-engagements"), EntityEngagement),
+      countIf(canSeeTeam, User, { where: { status: "Active" } }),
+      countIf(canSeeTeam, Session, { where: { revokedAt: null } }),
+      countIf(canSeeTeam, AuditLog),
     ]);
 
     const totalApplications =
@@ -179,17 +229,19 @@ const getDashboardStats = async (req, res) => {
       },
     ];
 
+    const visibleBreakdown = moduleBreakdown.filter((m) =>
+      m.id === "new-company"
+        ? can("new-company") || can("legacy-company")
+        : m.id === "new-individual"
+          ? can("new-individual") || can("legacy-individual")
+          : can(m.id)
+    );
+
     // 4. Status Breakdown Aggregation
     // Check statuses in NewCompanyRegistration and NewIndividualEngagement
     const [companyStatusRows, individualStatusRows] = await Promise.all([
-      NewCompanyRegistration.findAll({
-        attributes: ["status"],
-        raw: true,
-      }).catch(() => []),
-      NewIndividualEngagement.findAll({
-        attributes: ["status"],
-        raw: true,
-      }).catch(() => []),
+      can("new-company") ? NewCompanyRegistration.findAll({ attributes: ["status"], raw: true }).catch(() => []) : [],
+      can("new-individual") ? NewIndividualEngagement.findAll({ attributes: ["status"], raw: true }).catch(() => []) : [],
     ]);
 
     let pendingCount = 0;
@@ -228,7 +280,7 @@ const getDashboardStats = async (req, res) => {
 
     // 5. Recent Submissions Feed (Top 10 across models with actual files and PDFs)
     const [recentCompanies, recentIndividuals, recentGsts] = await Promise.all([
-      NewCompanyRegistration.findAll({
+      !can("new-company") ? [] : NewCompanyRegistration.findAll({
         limit: 6,
         order: [["createdAt", "DESC"]],
         include: [
@@ -261,7 +313,7 @@ const getDashboardStats = async (req, res) => {
         console.error("Failed to fetch recentCompanies:", e);
         return [];
       }),
-      NewIndividualEngagement.findAll({
+      !can("new-individual") ? [] : NewIndividualEngagement.findAll({
         limit: 6,
         order: [["createdAt", "DESC"]],
         include: [
@@ -298,7 +350,7 @@ const getDashboardStats = async (req, res) => {
         console.error("Failed to fetch recentIndividuals:", e);
         return [];
       }),
-      GstRegistration
+      GstRegistration && can("gst")
         ? GstRegistration.findAll({
             limit: 6,
             order: [["createdAt", "DESC"]],
@@ -457,16 +509,12 @@ const getDashboardStats = async (req, res) => {
 
     // Populate trend buckets from records within the range
     const [recentCompanyDateRows, recentIndivDateRows] = await Promise.all([
-      NewCompanyRegistration.findAll({
-        where: { createdAt: { [Op.gte]: startDate } },
-        attributes: ["createdAt"],
-        raw: true,
-      }).catch(() => []),
-      NewIndividualEngagement.findAll({
-        where: { createdAt: { [Op.gte]: startDate } },
-        attributes: ["createdAt"],
-        raw: true,
-      }).catch(() => []),
+      !can("new-company")
+        ? []
+        : NewCompanyRegistration.findAll({ where: { createdAt: { [Op.gte]: startDate } }, attributes: ["createdAt"], raw: true }).catch(() => []),
+      !can("new-individual")
+        ? []
+        : NewIndividualEngagement.findAll({ where: { createdAt: { [Op.gte]: startDate } }, attributes: ["createdAt"], raw: true }).catch(() => []),
     ]);
 
     const addToBucket = (dateVal, type) => {
@@ -491,7 +539,7 @@ const getDashboardStats = async (req, res) => {
 
     // If practice has low activity in the recent window, provide smooth historical trend baseline
     const hasAnyActivity = trendDays.some((d) => d.total > 0);
-    if (!hasAnyActivity) {
+    if (!hasAnyActivity && hasApplicationAccess) {
       trendDays.forEach((d, idx) => {
         // Aesthetic simulated baseline calibrated to practice size
         const baseCompany = ((idx * 3 + 4) % 7) + 1;
@@ -517,7 +565,7 @@ const getDashboardStats = async (req, res) => {
       antvCategoryTrend.push({ date: d.label, type: "Other Tax & Trusts", count: d.other });
     });
 
-    const antvDistributionData = moduleBreakdown.map((m) => ({
+    const antvDistributionData = visibleBreakdown.map((m) => ({
       service: m.shortName,
       fullName: m.name,
       count: m.count,
@@ -533,10 +581,16 @@ const getDashboardStats = async (req, res) => {
         approvedLodged: completedCount,
         rejectedDeclined: rejectedCount,
         draftIncomplete: draftCount,
-        activeStaff: activeUsersCount,
-        activeSessions: activeSessionsCount,
-        totalAuditLogs: totalAuditLogsCount,
+        activeStaff: canSeeTeam ? activeUsersCount : null,
+        activeSessions: canSeeTeam ? activeSessionsCount : null,
+        totalAuditLogs: canSeeTeam ? totalAuditLogsCount : null,
       },
+      access: {
+        applications: hasApplicationAccess,
+        team: canSeeTeam,
+        applicationModules: APPLICATION_MODULE_KEYS.filter(can),
+      },
+      modules: await otherModuleSummaries(permissions),
       definitions: {
         totalApplications: {
           title: "Total Applications & Registrations",
@@ -555,7 +609,7 @@ const getDashboardStats = async (req, res) => {
           plainText: "Active practice staff members and currently open secure portal sessions.",
         },
       },
-      moduleBreakdown,
+      moduleBreakdown: visibleBreakdown,
       recentApplications: finalRecent,
       recentSubmissions: finalRecent,
       trendData: trendDays,

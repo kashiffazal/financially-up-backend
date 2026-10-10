@@ -243,8 +243,30 @@ const notifyNewsletterSubscriber = async (subscriber, returning = false) => {
   }
 };
 
+/**
+ * Startup clean-up: older notifications were tagged with the wrong module's
+ * permission (e.g. Medicare with "gst.registration.view"). Re-tag every
+ * application notification with its own module's view permission. Safe to run
+ * on every start (only rows that differ are updated).
+ */
+const alignNotificationPermissions = async () => {
+  const { Op } = require("sequelize");
+  const { APPLICATION_MODULE_KEYS, viewPermissionOf } = require("../utils/modulePermissions");
+  let updated = 0;
+  for (const key of APPLICATION_MODULE_KEYS) {
+    const permission = viewPermissionOf(key);
+    const [count] = await Notification.update(
+      { permission },
+      { where: { moduleKey: key, [Op.or]: [{ permission: null }, { permission: { [Op.ne]: permission } }] } }
+    );
+    updated += count;
+  }
+  if (updated) console.log(`✅ Notifications: re-tagged ${updated} with their module's permission.`);
+};
+
 module.exports = {
   notificationBus,
+  alignNotificationPermissions,
   notifyNewsletterSubscriber,
   notifySubmission,
   notifyStatusChange,

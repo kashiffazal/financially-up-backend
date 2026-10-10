@@ -56,6 +56,18 @@ const contactLimiter = rateLimit({
   },
 });
 
+// Forgot-password emails and set-password submissions (per IP; separate from login attempts)
+const passwordLinkLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: parseInt(process.env.PASSWORD_LINK_RATE_LIMIT, 10) || 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "Too many password requests. Please wait a few minutes and try again.",
+  },
+});
+
 // Website newsletter sign-ups (per IP)
 const newsletterLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -73,4 +85,5 @@ module.exports = {
   searchLimiter,
   contactLimiter,
   newsletterLimiter,
+  passwordLinkLimiter,
 };

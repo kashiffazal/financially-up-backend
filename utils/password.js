@@ -42,7 +42,20 @@ const verifyPassword = async (hash, password) => {
   }
 };
 
+/**
+ * Password rules for staff accounts: at least 10 characters, with letters and numbers.
+ * @returns {string|null} A message when the password is too weak, otherwise null.
+ */
+const passwordProblem = (password) => {
+  const value = typeof password === "string" ? password : "";
+  if (value.length < 10) return "Password must be at least 10 characters long.";
+  if (value.length > 128) return "Password must be 128 characters or fewer.";
+  if (!/[A-Za-z]/.test(value) || !/\d/.test(value)) return "Password must include both letters and numbers.";
+  return null;
+};
+
 module.exports = {
+  passwordProblem,
   hashPassword,
   verifyPassword,
 };

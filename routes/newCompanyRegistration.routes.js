@@ -8,6 +8,7 @@
 const express = require("express");
 const router = express.Router();
 const { authenticate } = require("../middleware/authenticate");
+const { authorizeModule } = require("../middleware/authorize");
 
 const {
   createRegistration,
@@ -53,39 +54,39 @@ router.post("/", upload.any(), groupFilesByField, createRegistration);
 /* ─── Admin APIs ─── */
 
 /* List all registrations with pagination, search & status filters */
-router.get("/", authenticate, getRegistrations);
+router.get("/", authenticate, authorizeModule("new-company", "view"), getRegistrations);
 
 /* Get full details of a single registration */
-router.get("/:id", authenticate, getRegistrationById);
+router.get("/:id", authenticate, authorizeModule("new-company", "view"), getRegistrationById);
 
 /* Update a shareholder (triggers consent invalidation if shares change) */
-router.put("/:id/shareholders/:memberId", authenticate, updateShareholder);
+router.put("/:id/shareholders/:memberId", authenticate, authorizeModule("new-company", "manage"), updateShareholder);
 
 /* Submit admin AML/CTF review decision */
-router.put("/:id/decision", authenticate,
+router.put("/:id/decision", authenticate, authorizeModule("new-company", "manage"),
   upload.fields([{ name: "staffSignature", maxCount: 1 }]),
   submitAdminDecision
 );
-router.post("/:id/decision", authenticate,
+router.post("/:id/decision", authenticate, authorizeModule("new-company", "manage"),
   upload.fields([{ name: "staffSignature", maxCount: 1 }]),
   submitAdminDecision
 );
-router.put("/:id/admin-decision", authenticate,
+router.put("/:id/admin-decision", authenticate, authorizeModule("new-company", "manage"),
   upload.fields([{ name: "staffSignature", maxCount: 1 }]),
   submitAdminDecision
 );
-router.post("/:id/admin-decision", authenticate,
+router.post("/:id/admin-decision", authenticate, authorizeModule("new-company", "manage"),
   upload.fields([{ name: "staffSignature", maxCount: 1 }]),
   submitAdminDecision
 );
 
 /* Change lifecycle status (admin log row / bulk actions) */
-router.put("/:id/status", authenticate, updateStatus);
+router.put("/:id/status", authenticate, authorizeModule("new-company", "manage"), updateStatus);
 
 /* Download/view generated PDF by type */
-router.get("/:id/pdf/:type", authenticate, getPdf);
+router.get("/:id/pdf/:type", authenticate, authorizeModule("new-company", "view"), getPdf);
 
 /* Regenerate PDFs on demand */
-router.post("/:id/regenerate-pdf", authenticate, regeneratePdf);
+router.post("/:id/regenerate-pdf", authenticate, authorizeModule("new-company", "manage"), regeneratePdf);
 
 module.exports = router;

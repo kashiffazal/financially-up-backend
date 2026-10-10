@@ -17,6 +17,7 @@
 const express = require("express");
 const router = express.Router();
 const { authenticate } = require("../middleware/authenticate");
+const { authorizeModule } = require("../middleware/authorize");
 const { recordDeletionDisabled } = require("../middleware/recordDeletionDisabled");
 const {
   getAll,
@@ -27,18 +28,18 @@ const {
 } = require("../controllers/individualEngagement.controller");
 
 // GET /api/individual-engagement - Fetch all with pagination & filters
-router.get("/", authenticate, getAll);
+router.get("/", authenticate, authorizeModule("legacy-individual", "view"), getAll);
 
 // GET /api/individual-engagement/:id - Fetch single record by ID
-router.get("/:id", authenticate, getById);
+router.get("/:id", authenticate, authorizeModule("legacy-individual", "view"), getById);
 
 // POST /api/individual-engagement - Create new record (Old App calls this)
 router.post("/", create);
 
 // PUT /api/individual-engagement/:id - Update existing record
-router.put("/:id", authenticate, update);
+router.put("/:id", authenticate, authorizeModule("legacy-individual", "manage"), update);
 
 // DELETE /api/individual-engagement/:id - Delete a record
-router.delete("/:id", authenticate, recordDeletionDisabled); // records are never deleted
+router.delete("/:id", authenticate, authorizeModule("legacy-individual", "manage"), recordDeletionDisabled); // records are never deleted
 
 module.exports = router;
