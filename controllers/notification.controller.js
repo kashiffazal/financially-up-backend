@@ -15,7 +15,7 @@ const { MODULES_BY_KEY, notificationBus } = require("../services/notification.se
 
 const HEARTBEAT_MS = 25000;
 
-const { Notification, NotificationRead, ContactEnquiry, NewIndividualClient } = models;
+const { Notification, NotificationRead, ContactEnquiry, NewsletterSubscriber, NewIndividualClient } = models;
 
 const MAX_PAGE_SIZE = 50;
 
@@ -66,13 +66,18 @@ const parseMeta = (meta) => {
 };
 
 const ENQUIRY_MODULE = { name: "Website Enquiry", color: "#0ea5e9" };
+const NEWSLETTER_MODULE = { name: "Newsletter", color: "#8b5cf6" };
+
+/** Modules that aren't application forms (not in the search registry). */
+const OTHER_MODULES = { enquiries: ENQUIRY_MODULE, newsletter: NEWSLETTER_MODULE };
+const moduleInfo = (key) => MODULES_BY_KEY[key] || OTHER_MODULES[key] || {};
 
 const serialize = (row, read) => ({
   id: row.id,
   type: row.type,
   moduleKey: row.moduleKey,
-  moduleName: (MODULES_BY_KEY[row.moduleKey] || (row.moduleKey === "enquiries" ? ENQUIRY_MODULE : {})).name || null,
-  color: (MODULES_BY_KEY[row.moduleKey] || (row.moduleKey === "enquiries" ? ENQUIRY_MODULE : {})).color || "#64748b",
+  moduleName: moduleInfo(row.moduleKey).name || null,
+  color: moduleInfo(row.moduleKey).color || "#64748b",
   recordId: row.recordId,
   reference: row.reference,
   title: row.title,
@@ -180,6 +185,15 @@ const buildTarget = async (row) => {
     if (!enquiry) return { kind: "enquiry", exists: false };
     const { ipAddress, userAgent, ...safe } = enquiry;
     return { kind: "enquiry", exists: true, url: `/admin/enquiries?open=${enquiry.id}`, enquiry: safe };
+  }
+
+  if (row.moduleKey === "newsletter" && row.recordId) {
+    const subscriber = await NewsletterSubscriber.findByPk(row.recordId, {
+      attributes: { exclude: ["ipAddress", "userAgent"] },
+      raw: true,
+    });
+    if (!subscriber) return { kind: "subscriber", exists: false };
+    return { kind: "subscriber", exists: true, url: `/admin/newsletter?open=${subscriber.id}`, subscriber };
   }
 
   const mod = MODULES_BY_KEY[row.moduleKey];

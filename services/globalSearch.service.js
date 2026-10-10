@@ -323,6 +323,35 @@ const SEARCH_REGISTRY = [
       "TFN / ABN Applicant",
     subtitle: () => "TFN / ABN Application",
   },
+  {
+    // Website blog posts (not an application form: opens the post editor)
+    key: "blog",
+    name: "Blog Posts",
+    model: "BlogPost",
+    route: "/admin/blog",
+    color: "#0d9488",
+    permission: "blog.view",
+    refField: "slug",
+    refFallbackPrefix: "POST",
+    fields: [
+      { col: "title", label: "Title", kind: "text" },
+      { col: "slug", label: "Slug", kind: "text" },
+      { col: "excerpt", label: "Excerpt", kind: "text" },
+      { col: "authorName", label: "Author", kind: "text" },
+      { col: "focusKeyword", label: "Focus Keyword", kind: "text" },
+      { col: "metaTitle", label: "Meta Title", kind: "text" },
+    ],
+    extraAttributes: ["publishedAt"],
+    title: (r) => r.title || "Untitled post",
+    subtitle: (r) => (r.authorName ? `Blog post by ${r.authorName}` : "Blog post"),
+    // Draft / Published / Scheduled / Trash, as shown in the Blog Posts list
+    statusOf: (r) => {
+      if (r.status === "trash") return "Trash";
+      if (r.status === "draft") return "Draft";
+      return r.publishedAt && new Date(r.publishedAt) > new Date() ? "Scheduled" : "Published";
+    },
+    urlOf: (r) => `/admin/blog/${r.id}`,
+  },
 ];
 
 // ============================
@@ -654,13 +683,13 @@ const searchModule = async (mod, q, perModule) => {
       reference,
       title,
       subtitle: mod.subtitle(row),
-      status: row.status || null,
+      status: (mod.statusOf ? mod.statusOf(row) : row.status) || null,
       createdAt: row.createdAt,
       matchedField: best.field,
       matchedLabel: best.label,
       matchedValue: best.value,
       score: best.score,
-      url: `${mod.route}?open=${row.id}`,
+      url: mod.urlOf ? mod.urlOf(row) : `${mod.route}?open=${row.id}`,
     };
   });
 

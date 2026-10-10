@@ -61,4 +61,34 @@ upload.publicForm = multer({
   limits: { fileSize: 15 * 1024 * 1024, files: 20 },
 });
 
+/**
+ * Blog images (featured image + images inside posts): /public/uploads/blog/YYYY/MM/
+ * Raster images only (no SVG, which can carry scripts), 8MB each.
+ */
+const BLOG_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+upload.blogImage = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const now = new Date();
+      const uploadDir = path.join(
+        __dirname,
+        "../public/uploads/blog",
+        `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}`
+      );
+      if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+      cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      const basename = path.basename(file.originalname, path.extname(file.originalname)).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 60);
+      cb(null, `${basename}-${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`);
+    },
+  }),
+  fileFilter: (req, file, cb) =>
+    BLOG_IMAGE_TYPES.includes(file.mimetype)
+      ? cb(null, true)
+      : cb(new Error("Only JPG, PNG, WEBP or GIF images can be uploaded."), false),
+  limits: { fileSize: 8 * 1024 * 1024, files: 1 },
+});
+
 module.exports = upload;

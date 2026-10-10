@@ -123,6 +123,12 @@ const SYSTEM_PERMISSIONS = [
 
   // Website Contact Enquiries
   { module: "enquiries", resource: "enquiry", action: "view", slug: "enquiries.view", name: "View Contact Enquiries", description: "View messages sent from the website contact forms" },
+  // Website Blog (posts, categories, tags)
+  { module: "blog", resource: "post", action: "view", slug: "blog.view", name: "View Blog Posts", description: "View blog posts, categories and tags in the admin panel" },
+  { module: "blog", resource: "post", action: "manage", slug: "blog.manage", name: "Manage Blog", description: "Create, edit, publish, feature and delete blog posts, categories and tags" },
+  // Website Newsletter subscribers
+  { module: "newsletter", resource: "subscriber", action: "view", slug: "newsletter.view", name: "View Newsletter Subscribers", description: "View and export the website newsletter subscriber list" },
+  { module: "newsletter", resource: "subscriber", action: "manage", slug: "newsletter.manage", name: "Manage Newsletter Subscribers", description: "Unsubscribe or re-subscribe newsletter subscribers" },
   { module: "enquiries", resource: "enquiry", action: "manage", slug: "enquiries.manage", name: "Manage Contact Enquiries", description: "Update enquiry status, add staff notes and delete enquiries" },
 ];
 

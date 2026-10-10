@@ -34,6 +34,7 @@ const MODULES_BY_MODEL = Object.fromEntries(SEARCH_REGISTRY.map((m) => [m.model,
 const MODULES_BY_KEY = Object.fromEntries(SEARCH_REGISTRY.map((m) => [m.key, m]));
 
 const ENQUIRY_PERMISSION = "enquiries.view";
+const NEWSLETTER_PERMISSION = "newsletter.view";
 
 // ============================
 // Helpers
@@ -217,8 +218,34 @@ const notifyContactEnquiry = async (enquiry) => {
   }
 };
 
+/**
+ * Someone joined (or re-joined) the website newsletter.
+ * @param {object}  subscriber
+ * @param {boolean} returning - true when they had unsubscribed before
+ */
+const notifyNewsletterSubscriber = async (subscriber, returning = false) => {
+  try {
+    const row = plain(subscriber);
+    const where = row.source === "blog_article" ? "a blog article" : "the blog";
+    return save({
+      type: "newsletter_subscriber",
+      moduleKey: "newsletter",
+      recordId: row.id,
+      reference: null,
+      title: returning ? `${row.email} re-subscribed to the newsletter` : `New newsletter subscriber: ${row.email}`,
+      message: `Signed up from ${where}${row.sourcePage ? ` (${row.sourcePage})` : ""}.`,
+      meta: { email: row.email, source: row.source, sourcePage: row.sourcePage, returning },
+      permission: NEWSLETTER_PERMISSION,
+    });
+  } catch (error) {
+    console.error("[Notification] notifyNewsletterSubscriber error:", error.message);
+    return null;
+  }
+};
+
 module.exports = {
   notificationBus,
+  notifyNewsletterSubscriber,
   notifySubmission,
   notifyStatusChange,
   notifyContactEnquiry,

@@ -56,8 +56,21 @@ const contactLimiter = rateLimit({
   },
 });
 
+// Website newsletter sign-ups (per IP)
+const newsletterLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: parseInt(process.env.NEWSLETTER_RATE_LIMIT, 10) || 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "Too many sign-up attempts. Please wait a few minutes and try again.",
+  },
+});
+
 module.exports = {
   authLimiter,
   searchLimiter,
   contactLimiter,
+  newsletterLimiter,
 };

@@ -46,6 +46,9 @@ const dashboardRoutes = require("./routes/dashboard.routes");
 const searchRoutes = require("./routes/search.routes");
 const notificationRoutes = require("./routes/notification.routes");
 const contactEnquiryRoutes = require("./routes/contactEnquiry.routes");
+const newsletterRoutes = require("./routes/newsletter.routes");
+const blogRoutes = require("./routes/blog.routes");
+const blogAdminRoutes = require("./routes/blogAdmin.routes");
 
 // Create Express app
 const app = express();
@@ -193,6 +196,9 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/search", searchRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/contact-enquiries", contactEnquiryRoutes);
+app.use("/api/newsletter-subscribers", newsletterRoutes);
+app.use("/api/blog", blogRoutes); // public website (live posts only)
+app.use("/api/blog-admin", blogAdminRoutes); // admin panel (blog.view / blog.manage)
 
 // ============================
 // Error Handling

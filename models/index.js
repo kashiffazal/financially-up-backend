@@ -21,6 +21,15 @@ const Setting = require("./Setting");
 const Notification = require("./Notification");
 const NotificationRead = require("./NotificationRead");
 const ContactEnquiry = require("./ContactEnquiry");
+const NewsletterSubscriber = require("./NewsletterSubscriber");
+
+// ============================
+// Blog (website /blog, managed at /admin/blog)
+// ============================
+const BlogPost = require("./BlogPost");
+const BlogCategory = require("./BlogCategory");
+const BlogTag = require("./BlogTag");
+const { BlogPostCategory, BlogPostTag } = require("./BlogPostTerm");
 
 // ============================
 // Legacy Models (Preserved)
@@ -182,6 +191,15 @@ NewCompanyPdf.belongsTo(NewCompanyRegistration, { foreignKey: "registrationId" }
 NewCompanyRegistration.hasMany(NewCompanyAuditLog, { foreignKey: "registrationId", as: "auditLogs" });
 NewCompanyAuditLog.belongsTo(NewCompanyRegistration, { foreignKey: "registrationId" });
 
+// Blog: posts ↔ categories / tags (many-to-many), category tree, author
+BlogPost.belongsToMany(BlogCategory, { through: BlogPostCategory, foreignKey: "postId", otherKey: "categoryId", as: "categories" });
+BlogCategory.belongsToMany(BlogPost, { through: BlogPostCategory, foreignKey: "categoryId", otherKey: "postId", as: "posts" });
+BlogPost.belongsToMany(BlogTag, { through: BlogPostTag, foreignKey: "postId", otherKey: "tagId", as: "tags" });
+BlogTag.belongsToMany(BlogPost, { through: BlogPostTag, foreignKey: "tagId", otherKey: "postId", as: "posts" });
+BlogCategory.belongsTo(BlogCategory, { foreignKey: "parentId", as: "parent" });
+BlogCategory.hasMany(BlogCategory, { foreignKey: "parentId", as: "children" });
+BlogPost.belongsTo(User, { foreignKey: "authorUserId", as: "author", constraints: false });
+
 // Export all models and the sequelize instance
 // Notifications ↔ per-user read state
 Notification.hasMany(NotificationRead, { foreignKey: "notificationId", as: "reads", onDelete: "CASCADE" });
@@ -202,6 +220,13 @@ module.exports = {
   Notification,
   NotificationRead,
   ContactEnquiry,
+  NewsletterSubscriber,
+  // Blog
+  BlogPost,
+  BlogCategory,
+  BlogTag,
+  BlogPostCategory,
+  BlogPostTag,
   // Legacy
   IndividualEngagement,
   ApplyTfnAbns,

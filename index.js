@@ -151,6 +151,17 @@ const initDatabase = async (retries = 3, delayMs = 3000) => {
       // Seed global settings (company identity, contact emails, app URLs)
       const { seedSettings } = require("./utils/settingsSeed");
       await seedSettings();
+
+      // One-time import of the website's original (hardcoded) blog articles
+      try {
+        const { seedBlog } = require("./utils/blogSeed");
+        await seedBlog();
+        // ...and the second batch of sample articles (also one-time)
+        const { seedBlogBatch2 } = require("./utils/blogSeedBatch2");
+        await seedBlogBatch2();
+      } catch (blogSeedError) {
+        console.error("Blog seed failed (blog still works, posts can be added in the admin):", blogSeedError.message);
+      }
       console.log("✅ Global settings seeding completed.");
       return;
     } catch (error) {
