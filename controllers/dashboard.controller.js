@@ -572,6 +572,8 @@ const getDashboardStats = async (req, res) => {
       route: m.route,
     }));
 
+    // Company Details for the practice card (Settings > Company Details)
+    const practice = await require("../services/settings.service").getSettingsMap().catch(() => ({}));
     return res.status(200).json({
       success: true,
       range,
@@ -617,10 +619,10 @@ const getDashboardStats = async (req, res) => {
       antvCategoryTrend,
       antvDistributionData,
       practiceInfo: {
-        legalName: "Financially Up Pty Ltd",
-        phone: "1300 328 316",
-        email: "info@financiallyup.com.au",
-        address: "Level 5, 100 Walker St, North Sydney NSW 2060, Australia",
+        legalName: practice["company.legalName"],
+        phone: practice["company.phone"],
+        email: practice["company.email"],
+        address: practice["company.address"],
         asicAgentNumber: "Registered ASIC Agent",
         atoTaxAgent: "Registered Australian Tax Agent",
       },

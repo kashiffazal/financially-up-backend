@@ -49,3 +49,6 @@ next-env.d.ts
 !/public/uploads/signatures/.gitkeep
 !/public/uploads/documents
 !/public/uploads/documents/.gitkeep
+# Private client files (utils/privateFiles.js) - never commit
+/storage/uploads/*
+!.env.example

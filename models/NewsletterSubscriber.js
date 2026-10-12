@@ -17,6 +17,11 @@ const NewsletterSubscriber = sequelize.define(
       autoIncrement: true,
       primaryKey: true,
     },
+    name: {
+      type: DataTypes.STRING(120),
+      allowNull: true,
+      comment: "Name given on the sign-up form (older subscribers may have none)",
+    },
     email: {
       type: DataTypes.STRING(190),
       allowNull: false,

@@ -14,6 +14,9 @@
 const path = require("path");
 const fs = require("fs");
 const { Op } = require("sequelize");
+const { privateMonthDir, randomToken, uploadUrlOf, diskPathOfUpload } = require("../utils/privateFiles");
+const { brandText } = require("../utils/brand");
+const { getSettingsMap } = require("../services/settings.service");
 const NewCompanyRegistration = require("../models/NewCompanyRegistration");
 const NewCompanyOfficeholder = require("../models/NewCompanyOfficeholder");
 const NewCompanyShareholder = require("../models/NewCompanyShareholder");
@@ -48,17 +51,14 @@ function saveBase64Signature(base64Data, subDir) {
     if (!base64Data || !base64Data.startsWith("data:")) return null;
     const matches = base64Data.match(/^data:image\/(\w+);base64,(.+)$/);
     if (!matches) return null;
-    const ext = matches[1];
+    const ext = { png: "png", jpeg: "jpg", jpg: "jpg", webp: "webp" }[matches[1].toLowerCase()];
+    if (!ext) return null;
     const buffer = Buffer.from(matches[2], "base64");
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, "0");
-    const dir = path.join(__dirname, "../public/uploads", subDir, `${year}/${month}`);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    const fileName = `sig_${Date.now()}_${Math.round(Math.random() * 1e6)}.${ext}`;
-    const filePath = path.join(dir, fileName);
-    fs.writeFileSync(filePath, buffer);
-    return `/uploads/${subDir}/${year}/${month}/${fileName}`;
+    // Private folder + unguessable name (utils/privateFiles.js)
+    const { dir, urlBase } = privateMonthDir(subDir);
+    const fileName = `sig_${randomToken()}.${ext}`;
+    fs.writeFileSync(path.join(dir, fileName), buffer);
+    return `${urlBase}/${fileName}`;
   } catch (e) {
     console.error("Error saving base64 signature:", e);
     return null;
@@ -110,11 +110,9 @@ function resolveDocumentType(fieldName) {
   return DOCUMENT_TYPE_LABELS[fieldName] || fieldName;
 }
 
-/* Public path of a Multer file saved under public/uploads/documents/YYYY/MM */
+/* Link of a Multer file saved under storage/uploads/documents/YYYY/MM */
 function documentRelPath(file) {
-  const monthFolder = path.basename(path.dirname(file.path));
-  const yearFolder = path.basename(path.dirname(path.dirname(file.path)));
-  return `/uploads/documents/${yearFolder}/${monthFolder}/${file.filename}`;
+  return uploadUrlOf(file.path);
 }
 
 /* First uploaded file path for an indexed field, e.g. officer_0_idAttachment */
@@ -653,7 +651,7 @@ async function submitAdminDecision(req, res) {
       return res.status(404).json({ success: false, message: "Registration not found." });
     }
 
-    const staffName = body.reviewerName || "Financially Up Reviewer";
+    const staffName = body.reviewerName || brandText("Financially Up Reviewer", await getSettingsMap().catch(() => ({})));
     const sigType = body.signatureMethod || "draw";
 
     /* Process staff signature */
@@ -661,11 +659,7 @@ async function submitAdminDecision(req, res) {
     if (sigType === "draw" && body.signatureDrawnData) {
       staffSigPath = saveBase64Signature(body.signatureDrawnData, "signatures");
     } else if (sigType === "upload" && files.staffSignature && files.staffSignature[0]) {
-      const f = files.staffSignature[0];
-      const now2 = new Date();
-      const year = now2.getFullYear();
-      const month = String(now2.getMonth() + 1).padStart(2, "0");
-      staffSigPath = `/uploads/signatures/${year}/${month}/${f.filename}`;
+      staffSigPath = uploadUrlOf(files.staffSignature[0].path);
     }
 
     /* Upsert admin review record */
@@ -801,11 +795,11 @@ async function getPdf(req, res) {
       return res.status(404).json({ success: false, message: "PDF not found." });
     }
 
-    const fullPath = path.join(__dirname, "../public", pdf.filePath);
-    if (!fs.existsSync(fullPath)) {
+    const fullPath = diskPathOfUpload(pdf.filePath);
+    if (!fullPath) {
       /* Try HTML fallback */
-      const htmlPath = fullPath.replace(/\.pdf$/, ".html");
-      if (fs.existsSync(htmlPath)) {
+      const htmlPath = diskPathOfUpload(String(pdf.filePath).replace(/\.pdf$/, ".html"));
+      if (htmlPath) {
         return res.sendFile(htmlPath);
       }
       return res.status(404).json({ success: false, message: "PDF file not found on disk." });

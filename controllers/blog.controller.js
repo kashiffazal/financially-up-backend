@@ -11,6 +11,10 @@
 
 const { BlogPost, BlogCategory, BlogTag } = require("../models");
 const { liveWhere, toPublicPost } = require("../services/blog.service");
+const { getSettingsMap } = require("../services/settings.service");
+
+/** Posts without an author show the company name (Settings > Company Details) */
+const companyNameOf = async () => (await getSettingsMap().catch(() => ({})))["company.name"] || "Financially Up";
 
 const postIncludes = [
   { model: BlogCategory, as: "categories", attributes: ["id", "name", "slug", "parentId"], through: { attributes: [] } },
@@ -53,7 +57,8 @@ const termCounts = (posts) => {
 const hub = async (req, res) => {
   try {
     const rows = await listLivePosts();
-    const posts = rows.map(toPublicPost);
+    const companyName = await companyNameOf();
+    const posts = rows.map((row) => toPublicPost(row, companyName));
     const counts = termCounts(rows.map((r) => r.get({ plain: true })));
 
     // Top-level categories in admin order for the filter bar (with counts; empty ones hidden)
@@ -78,6 +83,7 @@ const getBySlug = async (req, res) => {
     const post = await BlogPost.findOne({ where: { ...liveWhere(), slug: String(req.params.slug || "") }, include: postIncludes });
     if (!post) return res.status(404).json({ success: false, message: "Article not found." });
 
+    const companyName = await companyNameOf();
     const recent = await BlogPost.findAll({
       where: liveWhere(),
       include: postIncludes,
@@ -88,8 +94,8 @@ const getBySlug = async (req, res) => {
     return res.status(200).json({
       success: true,
       data: {
-        post: toPublicPost(post),
-        recentPosts: recent.filter((r) => r.id !== post.id).slice(0, 3).map(toPublicPost),
+        post: toPublicPost(post, companyName),
+        recentPosts: recent.filter((r) => r.id !== post.id).slice(0, 3).map((r) => toPublicPost(r, companyName)),
       },
     });
   } catch (error) {

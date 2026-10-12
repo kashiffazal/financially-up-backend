@@ -2,14 +2,14 @@
  * Alert Email Service
  * ===================
  * Emails sent on website activity (all use the branded layout in mail.service):
- *   - sendEnquiryStaffAlert()     staff inbox (EMAIL_RECEIVER, cc EMAIL_CC), Reply-To = visitor
+ *   - sendEnquiryStaffAlert()     staff inbox for "enquiries" (Settings > Email > Recipients), Reply-To = visitor
  *   - sendEnquiryConfirmation()   "we received your enquiry" to the visitor
- *   - sendApplicationStaffAlert() staff inbox when an application form is submitted
+ *   - sendApplicationStaffAlert() staff inbox of that form (its own recipients, else the default ones)
  *
  * Every function throws on failure so callers can record the delivery status.
  */
 
-const { sendMail, renderEmail, mailConfig } = require("./mail.service");
+const { sendMail, renderEmail, mailConfig, getStaffRecipients } = require("./mail.service");
 
 const SOURCE_LABELS = { contact_page: "Contact page", contact_modal: "Contact Us popup" };
 
@@ -20,8 +20,9 @@ const fullNameOf = (e) => [e.firstName, e.lastName].filter(Boolean).join(" ") ||
  * @param {object} enquiry - ContactEnquiry (plain or instance)
  */
 const sendEnquiryStaffAlert = async (enquiry) => {
-  const { staffTo, staffCc, appUrl } = mailConfig();
-  if (!staffTo) throw new Error("EMAIL_RECEIVER is not configured.");
+  const { appUrl } = mailConfig();
+  const { to: staffTo, cc: staffCc, bcc: staffBcc } = await getStaffRecipients("enquiries");
+  if (!staffTo.length) throw new Error("No staff recipients set (Settings > Email > Recipients).");
   const name = fullNameOf(enquiry);
 
   const { html, text } = await renderEmail({
@@ -44,6 +45,7 @@ const sendEnquiryStaffAlert = async (enquiry) => {
   return sendMail({
     to: staffTo,
     cc: staffCc,
+    bcc: staffBcc,
     replyTo: enquiry.email,
     subject: `New website enquiry · ${name} · ${enquiry.referenceNumber}`,
     html,
@@ -56,7 +58,7 @@ const sendEnquiryStaffAlert = async (enquiry) => {
  * @param {object} enquiry
  */
 const sendEnquiryConfirmation = async (enquiry) => {
-  const { staffTo } = mailConfig();
+  const { to: staffTo } = await getStaffRecipients("enquiries");
   const { html, text } = await renderEmail({
     preheader: `We've received your enquiry (${enquiry.referenceNumber}).`,
     heading: `Thanks for getting in touch, ${enquiry.firstName}`,
@@ -73,7 +75,7 @@ const sendEnquiryConfirmation = async (enquiry) => {
 
   return sendMail({
     to: enquiry.email,
-    replyTo: staffTo || undefined,
+    replyTo: staffTo[0] || undefined,
     subject: `We've received your enquiry (${enquiry.referenceNumber}) — Financially Up`,
     html,
     text,
@@ -82,11 +84,12 @@ const sendEnquiryConfirmation = async (enquiry) => {
 
 /**
  * Staff alert for a new application form submission.
- * @param {object} info - { moduleName, route, recordId, reference, clientName, email, phone }
+ * @param {object} info - { moduleKey, moduleName, route, recordId, reference, clientName, email, phone }
  */
-const sendApplicationStaffAlert = async ({ moduleName, route, recordId, reference, clientName, email, phone }) => {
-  const { staffTo, staffCc, appUrl } = mailConfig();
-  if (!staffTo) throw new Error("EMAIL_RECEIVER is not configured.");
+const sendApplicationStaffAlert = async ({ moduleKey, moduleName, route, recordId, reference, clientName, email, phone }) => {
+  const { appUrl } = mailConfig();
+  const { to: staffTo, cc: staffCc, bcc: staffBcc } = await getStaffRecipients(moduleKey);
+  if (!staffTo.length) throw new Error("No staff recipients set (Settings > Email > Recipients).");
 
   const { html, text } = await renderEmail({
     preheader: `${clientName} submitted a new ${moduleName} application.`,
@@ -105,6 +108,7 @@ const sendApplicationStaffAlert = async ({ moduleName, route, recordId, referenc
   return sendMail({
     to: staffTo,
     cc: staffCc,
+    bcc: staffBcc,
     replyTo: email || undefined,
     subject: `New ${moduleName} · ${clientName} · ${reference}`,
     html,

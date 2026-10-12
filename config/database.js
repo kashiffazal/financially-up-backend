@@ -8,11 +8,27 @@
 
 const { Sequelize } = require("sequelize");
 
+/**
+ * Hostinger puts an account prefix in front of database and user names
+ * (staging u272433291_, client u114088816_). Set DB_PREFIX per server and keep
+ * DB_NAME / DB_USER the same everywhere; a name that already has a u123..._
+ * prefix gets the DB_PREFIX one instead. Without DB_PREFIX the names are used as is.
+ */
+const withPrefix = (value) => {
+  const prefix = (process.env.DB_PREFIX || "").trim();
+  if (!prefix || !value) return value;
+  return prefix + value.replace(/^u\d+_/, "");
+};
+
+const DB_NAME = withPrefix(process.env.DB_NAME || "financially-up");
+const DB_USER = withPrefix(process.env.DB_USER || "root");
+
 // Create Sequelize instance with MySQL connection parameters from environment
+// (the password only ever comes from DB_PASSWORD)
 const sequelize = new Sequelize(
-  process.env.DB_NAME || "financially-up",
-  process.env.DB_USER || "root",
-  process.env.DB_PASSWORD || "innotechPC123$#",
+  DB_NAME,
+  DB_USER,
+  process.env.DB_PASSWORD || "",
   {
     host: process.env.DB_HOST || "localhost",
     port: process.env.DB_PORT || 3306,

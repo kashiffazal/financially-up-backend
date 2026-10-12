@@ -106,6 +106,7 @@ const notifySubmission = async (modelName, record) => {
 
     if (!MODULES_WITH_OWN_STAFF_EMAIL.has(mod.key)) {
       sendApplicationStaffAlert({
+        moduleKey: mod.key,
         moduleName: mod.name,
         route: mod.route,
         recordId: row.id,
@@ -227,14 +228,15 @@ const notifyNewsletterSubscriber = async (subscriber, returning = false) => {
   try {
     const row = plain(subscriber);
     const where = row.source === "blog_article" ? "a blog article" : "the blog";
+    const who = row.name ? `${row.name} (${row.email})` : row.email;
     return save({
       type: "newsletter_subscriber",
       moduleKey: "newsletter",
       recordId: row.id,
       reference: null,
-      title: returning ? `${row.email} re-subscribed to the newsletter` : `New newsletter subscriber: ${row.email}`,
+      title: returning ? `${who} re-subscribed to the newsletter` : `New newsletter subscriber: ${who}`,
       message: `Signed up from ${where}${row.sourcePage ? ` (${row.sourcePage})` : ""}.`,
-      meta: { email: row.email, source: row.source, sourcePage: row.sourcePage, returning },
+      meta: { name: row.name || null, email: row.email, source: row.source, sourcePage: row.sourcePage, returning },
       permission: NEWSLETTER_PERMISSION,
     });
   } catch (error) {

@@ -50,27 +50,34 @@ const safe = (record) => {
 };
 
 /**
- * POST /api/newsletter-subscribers (public)  { email, source, sourcePage, formElapsedMs, fu_newsletter_trap }
+ * POST /api/newsletter-subscribers (public)  { name, email, source, sourcePage, formElapsedMs, fu_newsletter_trap }
  */
 const subscribe = async (req, res) => {
   try {
     const body = req.body || {};
+    const name = clean(body.name, 120);
     const email = clean(body.email, 190).toLowerCase();
+    if (!name) {
+      return res.status(400).json({ success: false, message: "Please enter your name." });
+    }
     if (!EMAIL_REGEX.test(email)) {
       return res.status(400).json({ success: false, message: "Please enter a valid email address." });
     }
 
     // Suspected bots get the normal success reply, but nothing is saved
+    // (browser autofill may copy the email or name into the hidden field, so those are allowed)
     const trap = clean(body[HONEYPOT_FIELD], 200).toLowerCase();
     const elapsedMs = Number(body.formElapsedMs);
     const isBot =
-      (trap && trap !== email) || (Number.isFinite(elapsedMs) && elapsedMs >= 0 && elapsedMs < MIN_HUMAN_FILL_MS);
+      (trap && trap !== email && trap !== name.toLowerCase()) ||
+      (Number.isFinite(elapsedMs) && elapsedMs >= 0 && elapsedMs < MIN_HUMAN_FILL_MS);
     if (isBot) {
       console.warn(`[Newsletter] Ignored a suspected bot sign-up for ${email}`);
       return res.status(201).json({ success: true, message: "Thanks for subscribing! Check your inbox soon." });
     }
 
     const details = {
+      name,
       source: SOURCES.includes(body.source) ? body.source : "blog_listing",
       sourcePage: clean(body.sourcePage, 255) || null,
       ipAddress: req.ip || null,
@@ -79,6 +86,8 @@ const subscribe = async (req, res) => {
 
     const existing = await NewsletterSubscriber.findOne({ where: { email } });
     if (existing?.status === "Subscribed") {
+      // Older sign-ups had no name: keep the one given now
+      if (!existing.name) await existing.update({ name });
       return res.status(200).json({ success: true, alreadySubscribed: true, message: "You're already subscribed — thank you!" });
     }
 
@@ -114,7 +123,7 @@ const subscribe = async (req, res) => {
 
 /**
  * GET /api/newsletter-subscribers (staff)
- * Query: status (Subscribed|Unsubscribed), search (email), from / to (YYYY-MM-DD, by sign-up date)
+ * Query: status (Subscribed|Unsubscribed), search (name or email), from / to (YYYY-MM-DD, by sign-up date)
  * Returns every match (the admin table paginates and exports the same list) + status counts.
  */
 const list = async (req, res) => {
@@ -123,7 +132,10 @@ const list = async (req, res) => {
     const where = {};
     if (STATUSES.includes(status)) where.status = status;
     const q = clean(search, 190);
-    if (q) where.email = { [Op.like]: `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%` };
+    if (q) {
+      const like = { [Op.like]: `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%` };
+      where[Op.or] = [{ email: like }, { name: like }];
+    }
 
     // Dates are whole calendar days in Sydney time (daylight saving aware)
     const day = (value) => (/^\d{4}-\d{2}-\d{2}$/.test(String(value || "")) ? value : null);

@@ -45,6 +45,11 @@ async function getSettingsMap() {
     for (const row of rows) {
       map[row.key] = row.value;
     }
+    // Domains always follow this server's config (SITE_URL / API_URL), not values saved earlier
+    const { siteUrl, apiUrl } = require("../utils/siteConfig");
+    map["url.website"] = siteUrl();
+    map["url.api"] = apiUrl();
+    map["url.adminPortal"] = `${siteUrl()}/admin`;
     cachedMap = map;
     cachedAt = Date.now();
     return map;
@@ -81,7 +86,8 @@ async function updateSettings(updates = {}) {
 
   for (const [key, value] of Object.entries(updates)) {
     const row = await Setting.findOne({ where: { key } });
-    if (!row) {
+    // Departments, email routing and internal markers have their own screens / code
+    if (!row || ["system", "staff", "mail"].includes(row.group)) {
       ignored.push(key);
       continue;
     }

@@ -29,6 +29,7 @@ const permissionRoutes = require("./routes/permission.routes");
 const auditRoutes = require("./routes/audit.routes");
 const settingRoutes = require("./routes/setting.routes");
 const departmentRoutes = require("./routes/department.routes");
+const emailSettingsRoutes = require("./routes/emailSettings.routes");
 
 // Import Application Route files
 const individualEngagementRoutes = require("./routes/individualEngagement.routes");
@@ -61,21 +62,21 @@ const app = express();
 // CORS - allow requests from the frontend (New App) and the Old App
 // IMPORTANT: CORS must be registered BEFORE helmet so preflight OPTIONS
 // requests get the Access-Control-Allow-Origin header without interference.
-const allowedOrigins = (process.env.CORS_ORIGINS || "http://localhost:3000")
-  .split(",")
-  .map((origin) => origin.trim());
+// Allowed: the website (SITE_URL), anything listed in CORS_ORIGINS, and localhost
+// while developing. Server-to-server calls (no Origin header) are always allowed.
+const { siteUrl } = require("./utils/siteConfig");
+const allowedOrigins = [siteUrl(), ...(process.env.CORS_ORIGINS || "").split(",")]
+  .map((origin) => origin.trim().replace(/\/+$/, ""))
+  .filter(Boolean);
+const isLocalOrigin = (origin) => /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
 
 const corsOptions = {
   origin: function (origin, callback) {
-    if (
-      !origin ||
-      origin.includes("localhost") ||
-      origin.includes("127.0.0.1") ||
-      allowedOrigins.includes(origin)
-    ) {
+    if (!origin || allowedOrigins.includes(origin) || (process.env.NODE_ENV !== "production" && isLocalOrigin(origin))) {
       return callback(null, true);
     }
-    return callback(null, true);
+    // Not allowed: no CORS headers, so the browser blocks the response
+    return callback(null, false);
   },
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
   allowedHeaders: [
@@ -111,8 +112,9 @@ app.use(express.json({ limit: "10mb" })); // 10mb limit to handle base64 signatu
 // Parse URL-encoded bodies
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-// Serve uploaded files (blog images are public; everything else is protected below)
-const uploadsStaticDir = path.join(__dirname, "public/uploads");
+// Serve uploaded files: client files from storage/uploads (private, outside the
+// folder the web server serves itself), blog images from public/uploads
+const { PRIVATE_UPLOADS_DIR, PUBLIC_UPLOADS_DIR } = require("./utils/privateFiles");
 const staticOptions = {
   dotfiles: "ignore",
   etag: true,
@@ -129,17 +131,21 @@ const staticOptions = {
       // file is unchanged) instead of showing a copy cached for a day.
       res.setHeader("Cache-Control", "private, no-cache");
     }
+    // Client files (images too) must never sit in shared caches
+    if (filePath.startsWith(PRIVATE_UPLOADS_DIR + path.sep)) res.setHeader("Cache-Control", "private, no-cache");
   },
 };
 
-// Client files (signatures, documents, PDFs) need a signed-in staff member with
-// access to client applications; blog images stay public (middleware/protectUploads.js)
+// Client files (signatures, documents, PDFs) need a signed-in staff member who can
+// view the record's module; blog images stay public (middleware/protectUploads.js)
 const { protectUploads } = require("./middleware/protectUploads");
 app.use("/uploads", protectUploads);
 app.use("/api/uploads", protectUploads);
 
-app.use("/uploads", express.static(uploadsStaticDir, staticOptions));
-app.use("/api/uploads", express.static(uploadsStaticDir, staticOptions));
+for (const prefix of ["/uploads", "/api/uploads"]) {
+  app.use(prefix, express.static(PRIVATE_UPLOADS_DIR, staticOptions));
+  app.use(prefix, express.static(PUBLIC_UPLOADS_DIR, staticOptions));
+}
 
 // Dynamic on-demand PDF and document generation & serving middleware
 app.use("/uploads", dynamicPdfViewer);
@@ -186,6 +192,7 @@ app.use("/api/permissions", permissionRoutes);
 app.use("/api/audit-logs", auditRoutes);
 app.use("/api/settings", settingRoutes);
 app.use("/api/departments", departmentRoutes);
+app.use("/api/email-settings", emailSettingsRoutes);
 
 // Operational Form and Application Routes
 app.use("/api/individual-engagement", individualEngagementRoutes);

@@ -12,17 +12,15 @@
 
 const fs = require("fs");
 const path = require("path");
-const { embedSignatures, pdfServiceHeaders } = require("../utils/pdfServiceRequest");
+const { embedSignatures, pdfServiceHeaders, pdfServiceContext } = require("../utils/pdfServiceRequest");
+const { privateMonthDir, securePdfName } = require("../utils/privateFiles");
 const NewCompanyPdf = require("../models/NewCompanyPdf");
 
 /**
  * Resolves the PHP mPDF service base URL from environment
  */
 function getPhpPdfServerUrl() {
-  return (
-    process.env.PHP_PDF_SERVER_URL ||
-    "http://localhost/myProjects/nextjs/financially-up/financially-up-php-backend"
-  );
+  return require("../utils/siteConfig").phpPdfServerUrl();
 }
 
 /**
@@ -50,6 +48,7 @@ async function renderCompanyPdfViaPhp(type, data, fullPath, fileName, relPath, e
       method: "POST",
       headers: pdfServiceHeaders(),
       body: JSON.stringify({
+        ...(await pdfServiceContext()),
         type,
         // Signature images travel inside the request (the PHP server can't read this disk)
         data: embedSignatures(data),
@@ -67,7 +66,8 @@ async function renderCompanyPdfViaPhp(type, data, fullPath, fileName, relPath, e
     const result = await response.json();
     if (result && result.success) {
       // If PHP returned base64 and file was not written directly on local disk, write it now
-      if (result.pdfBase64 && !fs.existsSync(fullPath)) {
+      // Always keep the copy PHP returned (it may run on another server, and a rebuilt PDF must replace the old file)
+      if (result.pdfBase64) {
         const buffer = Buffer.from(result.pdfBase64, "base64");
         fs.writeFileSync(fullPath, buffer);
       }
@@ -102,6 +102,7 @@ async function renderHtmlToPdf(htmlContent, fullPath, title = "Company Registrat
       method: "POST",
       headers: pdfServiceHeaders(),
       body: JSON.stringify({
+        ...(await pdfServiceContext()),
         html: htmlContent,
         title,
         savePath: fullPath,
@@ -111,7 +112,8 @@ async function renderHtmlToPdf(htmlContent, fullPath, title = "Company Registrat
 
     const result = await response.json();
     if (result && result.success) {
-      if (result.pdfBase64 && !fs.existsSync(fullPath)) {
+      // Always keep the copy PHP returned (it may run on another server, and a rebuilt PDF must replace the old file)
+      if (result.pdfBase64) {
         const buffer = Buffer.from(result.pdfBase64, "base64");
         fs.writeFileSync(fullPath, buffer);
       }
@@ -153,15 +155,11 @@ async function savePdfRecord(registrationId, type, fileName, filePath, personNam
 }
 
 /**
- * Create the PDF output directory for a given year/month
+ * This month's private PDF folder (utils/privateFiles.js)
  */
 function ensurePdfDir() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const pdfDir = path.join(__dirname, "../public/uploads/pdf", `${year}/${month}`);
-  if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir, { recursive: true });
-  return { pdfDir, year, month };
+  const { dir, urlBase } = privateMonthDir("pdf");
+  return { pdfDir: dir, urlBase };
 }
 
 /**
@@ -185,11 +183,11 @@ function sanitizeName(name) {
 async function generateClientApplicationPDF(record) {
   const data = toPlain(record);
   const ref = data.referenceNumber || `CREG-${Date.now()}`;
-  const { pdfDir, year, month } = ensurePdfDir();
+  const { pdfDir, urlBase } = ensurePdfDir();
 
-  const fileName = `${ref}_Client_Application.pdf`;
+  const fileName = securePdfName(ref, "Client_Application");
   const fullPath = path.join(pdfDir, fileName);
-  const relPath = `/uploads/pdf/${year}/${month}/${fileName}`;
+  const relPath = `${urlBase}/${fileName}`;
 
   await renderCompanyPdfViaPhp("ClientApplication", data, fullPath, fileName, relPath);
 
@@ -206,11 +204,11 @@ async function generateClientApplicationPDF(record) {
 async function generateAdminReviewPDF(record) {
   const data = toPlain(record);
   const ref = data.referenceNumber || `CREG-${Date.now()}`;
-  const { pdfDir, year, month } = ensurePdfDir();
+  const { pdfDir, urlBase } = ensurePdfDir();
 
-  const fileName = `${ref}_Admin_Compliance_Review.pdf`;
+  const fileName = securePdfName(ref, "Admin_Compliance_Review");
   const fullPath = path.join(pdfDir, fileName);
-  const relPath = `/uploads/pdf/${year}/${month}/${fileName}`;
+  const relPath = `${urlBase}/${fileName}`;
 
   await renderCompanyPdfViaPhp("AdminReview", data, fullPath, fileName, relPath);
 
@@ -229,16 +227,16 @@ async function generateDirectorConsentPDFs(record, officeholderRecords) {
   const registration = toPlain(record);
   const officeholders = (officeholderRecords || []).map(toPlain);
   const ref = registration.referenceNumber || `CREG-${Date.now()}`;
-  const { pdfDir, year, month } = ensurePdfDir();
+  const { pdfDir, urlBase } = ensurePdfDir();
   const paths = [];
 
   for (const oh of officeholders) {
     if (!oh.consentAccepted) continue;
 
     const safeName = sanitizeName(oh.fullName);
-    const fileName = `${ref}_Director_Consent_${safeName}.pdf`;
+    const fileName = securePdfName(ref, `Director_Consent_${safeName}`);
     const fullPath = path.join(pdfDir, fileName);
-    const relPath = `/uploads/pdf/${year}/${month}/${fileName}`;
+    const relPath = `${urlBase}/${fileName}`;
 
     await renderCompanyPdfViaPhp("DirectorConsent", registration, fullPath, fileName, relPath, {
       officeholder: oh,
@@ -262,16 +260,16 @@ async function generateMemberConsentPDFs(record, shareholderRecords) {
   const registration = toPlain(record);
   const shareholders = (shareholderRecords || []).map(toPlain);
   const ref = registration.referenceNumber || `CREG-${Date.now()}`;
-  const { pdfDir, year, month } = ensurePdfDir();
+  const { pdfDir, urlBase } = ensurePdfDir();
   const paths = [];
 
   for (const sh of shareholders) {
     if (!sh.consentAccepted) continue;
 
     const safeName = sanitizeName(sh.fullName);
-    const fileName = `${ref}_Member_Consent_${safeName}.pdf`;
+    const fileName = securePdfName(ref, `Member_Consent_${safeName}`);
     const fullPath = path.join(pdfDir, fileName);
-    const relPath = `/uploads/pdf/${year}/${month}/${fileName}`;
+    const relPath = `${urlBase}/${fileName}`;
 
     await renderCompanyPdfViaPhp("MemberConsent", registration, fullPath, fileName, relPath, {
       shareholder: sh,

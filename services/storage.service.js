@@ -2,11 +2,12 @@
  * Storage Service
  * ===============
  * Handles converting base64 signature canvas data into PNG image files
- * and saving them to /public/uploads/signatures/.
+ * and saving them to storage/uploads/signatures/ (private, unguessable names).
  */
 
 const fs = require("fs");
 const path = require("path");
+const { privateMonthDir, randomToken } = require("../utils/privateFiles");
 
 /**
  * Saves a base64 signature data string to a PNG file.
@@ -25,22 +26,13 @@ function saveBase64Signature(base64Data, prefix = "sig") {
     }
 
     const imageBuffer = Buffer.from(matches[2], "base64");
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const { dir, urlBase } = privateMonthDir("signatures");
+    const fileName = `${String(prefix).replace(/[^a-zA-Z0-9_-]/g, "_")}-${randomToken()}.png`;
 
-    const targetDir = path.join(__dirname, "../public/uploads/signatures", `${year}/${month}`);
-    if (!fs.existsSync(targetDir)) {
-      fs.mkdirSync(targetDir, { recursive: true });
-    }
+    fs.writeFileSync(path.join(dir, fileName), imageBuffer);
 
-    const fileName = `${prefix}-${Date.now()}-${Math.round(Math.random() * 1e6)}.png`;
-    const fullPath = path.join(targetDir, fileName);
-
-    fs.writeFileSync(fullPath, imageBuffer);
-
-    // Return relative web URL path
-    return `/uploads/signatures/${year}/${month}/${fileName}`;
+    // Link used by the admin panel and PDFs
+    return `${urlBase}/${fileName}`;
   } catch (error) {
     console.error("Failed to save base64 signature:", error);
     return null;

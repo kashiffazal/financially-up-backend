@@ -2,31 +2,29 @@
  * Shared Multer Upload Middleware
  * ===============================
  * Reusable file upload handler for all engagement forms.
- * Stores uploaded documents in /public/uploads/documents/YYYY/MM/
+ * Stores uploaded documents in storage/uploads/documents/YYYY/MM/ (private, with
+ * an unguessable name; see utils/privateFiles.js). Blog images: public/uploads/blog.
  */
 
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const { privateMonthDir, secureFileName } = require("../utils/privateFiles");
+
+const DOCUMENT_EXT = {
+  "application/pdf": ".pdf",
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/webp": ".webp",
+  "application/msword": ".doc",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+};
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, "0");
-    const uploadDir = path.join(__dirname, "../public/uploads/documents", `${year}/${month}`);
-
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    const ext = path.extname(file.originalname);
-    const basename = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_-]/g, "_");
-    cb(null, `${basename}-${uniqueSuffix}${ext}`);
-  },
+  destination: (req, file, cb) => cb(null, privateMonthDir("documents").dir),
+  // Extension from the checked file type, never from the uploader's file name
+  filename: (req, file, cb) =>
+    cb(null, secureFileName(`${path.basename(file.originalname, path.extname(file.originalname))}${DOCUMENT_EXT[file.mimetype] || ""}`, "document")),
 });
 
 const fileFilter = (req, file, cb) => {

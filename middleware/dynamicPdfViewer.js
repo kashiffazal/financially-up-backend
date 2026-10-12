@@ -2,7 +2,17 @@ const fs = require("fs");
 const path = require("path");
 const { Op } = require("sequelize");
 
-const uploadsStaticDir = path.join(__dirname, "../public/uploads");
+const { PRIVATE_UPLOADS_DIR, existingUploadPath } = require("../utils/privateFiles");
+const { brandText } = require("../utils/brand");
+const { getSettingsMap } = require("../services/settings.service");
+
+/**
+ * Serves /uploads files and rebuilds a missing generated PDF / signature image
+ * from the database. Runs after middleware/protectUploads.js. A file is only
+ * rebuilt when a record stores that exact link, so guessing a name (e.g. from a
+ * reference number) never creates or returns a file. Rebuilt files are written
+ * to the private folder (storage/uploads).
+ */
 
 /**
  * Lazy template renderers to avoid circular dependencies
@@ -40,16 +50,20 @@ function loadDependencies() {
 async function dynamicPdfViewer(req, res, next) {
   try {
     const reqPath = req.path || "";
-    const cleanRelPath = reqPath.replace(/^\//, "");
-    const diskPath = path.join(uploadsStaticDir, cleanRelPath);
+    const cleanRelPath = decodeURIComponent(reqPath).replace(/^\//, "");
+    const diskPath = path.resolve(PRIVATE_UPLOADS_DIR, cleanRelPath);
+    if (!diskPath.startsWith(PRIVATE_UPLOADS_DIR + path.sep)) {
+      return res.status(400).json({ success: false, message: "Invalid file path." });
+    }
 
-    // 1. If exact file exists on disk, serve it immediately
-    if (fs.existsSync(diskPath) && fs.statSync(diskPath).isFile()) {
-      if (diskPath.endsWith(".pdf")) {
+    // 1. If the file exists on disk, serve it immediately
+    const existing = existingUploadPath(cleanRelPath);
+    if (existing) {
+      if (existing.endsWith(".pdf")) {
         res.setHeader("Content-Type", "application/pdf");
-        res.setHeader("Content-Disposition", `inline; filename="${path.basename(diskPath)}"`);
+        res.setHeader("Content-Disposition", `inline; filename="${path.basename(existing)}"`);
       }
-      return res.sendFile(diskPath);
+      return res.sendFile(existing);
     }
 
     // 2. Signature image auto-restoration
@@ -128,34 +142,28 @@ async function dynamicPdfViewer(req, res, next) {
       loadDependencies();
       const filename = path.basename(reqPath);
 
-      // Match Individual Engagement reference or filename
-      const nengMatch = filename.match(/(NENG-\d{4}-\d+|ENG-\d+)/i);
-      const refNumber = nengMatch ? nengMatch[1] : null;
-
+      // Individual Engagement whose saved PDF links include this exact file
       if (models?.NewIndividualEngagement) {
         let engagement = null;
-        if (refNumber) {
-          engagement = await models.NewIndividualEngagement.findOne({
-            where: {
-              [Op.or]: [
-                { referenceNumber: refNumber },
-                { clientPdfPath: { [Op.like]: `%${filename}%` } },
-                { adminPdfPath: { [Op.like]: `%${filename}%` } },
-                { acceptancePdfPath: { [Op.like]: `%${filename}%` } },
-                { auditPdfPath: { [Op.like]: `%${filename}%` } },
-              ],
-            },
-            include: [
-              "client",
-              "services",
-              "identity",
-              "documents",
-              "signatures",
-              "auditLogs",
-              "adminReview",
+        engagement = await models.NewIndividualEngagement.findOne({
+          where: {
+            [Op.or]: [
+              { clientPdfPath: { [Op.like]: `%${filename}%` } },
+              { adminPdfPath: { [Op.like]: `%${filename}%` } },
+              { acceptancePdfPath: { [Op.like]: `%${filename}%` } },
+              { auditPdfPath: { [Op.like]: `%${filename}%` } },
             ],
-          });
-        }
+          },
+          include: [
+            "client",
+            "services",
+            "identity",
+            "documents",
+            "signatures",
+            "auditLogs",
+            "adminReview",
+          ],
+        });
 
         // Also check by filename directly in NewIndividualPdf table
         if (!engagement && models.NewIndividualPdf) {
@@ -190,6 +198,8 @@ async function dynamicPdfViewer(req, res, next) {
           }
 
           if (renderedHtml) {
+            // Company name, phone, address... follow Settings > Company Details
+            renderedHtml = brandText(renderedHtml, await getSettingsMap().catch(() => ({})));
             const dir = path.dirname(diskPath);
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
             fs.writeFileSync(htmlPath, renderedHtml);
@@ -215,33 +225,27 @@ async function dynamicPdfViewer(req, res, next) {
         }
       }
 
-      // Match Company Registration reference or filename
-      const cregMatch = filename.match(/(CREG-\d{4}-\d+)/i);
-      const cregRef = cregMatch ? cregMatch[1] : null;
-
+      // Company Registration whose saved PDF links include this exact file
       if (models?.NewCompanyRegistration) {
         let registration = null;
-        if (cregRef) {
-          registration = await models.NewCompanyRegistration.findOne({
-            where: {
-              [Op.or]: [
-                { referenceNumber: cregRef },
-                { clientPdfPath: { [Op.like]: `%${filename}%` } },
-                { adminPdfPath: { [Op.like]: `%${filename}%` } },
-              ],
-            },
-            include: [
-              "officeholders",
-              "shareholders",
-              "beneficialOwners",
-              "documents",
-              "consents",
-              "adminReview",
-              "pdfs",
-              "auditLogs",
+        registration = await models.NewCompanyRegistration.findOne({
+          where: {
+            [Op.or]: [
+              { clientPdfPath: { [Op.like]: `%${filename}%` } },
+              { adminPdfPath: { [Op.like]: `%${filename}%` } },
             ],
-          });
-        }
+          },
+          include: [
+            "officeholders",
+            "shareholders",
+            "beneficialOwners",
+            "documents",
+            "consents",
+            "adminReview",
+            "pdfs",
+            "auditLogs",
+          ],
+        });
 
         if (registration) {
           let renderedHtml = null;
@@ -252,6 +256,8 @@ async function dynamicPdfViewer(req, res, next) {
           }
 
           if (renderedHtml) {
+            // Company name, phone, address... follow Settings > Company Details
+            renderedHtml = brandText(renderedHtml, await getSettingsMap().catch(() => ({})));
             const dir = path.dirname(diskPath);
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
             fs.writeFileSync(htmlPath, renderedHtml);

@@ -22,6 +22,9 @@ const {
 } = require("../models");
 
 const { saveBase64Signature } = require("../services/storage.service");
+const { uploadUrlOf, diskPathOfUpload } = require("../utils/privateFiles");
+const { brandText } = require("../utils/brand");
+const { getSettingsMap } = require("../services/settings.service");
 const {
   generateClientEngagementPDF,
   generateAdminReviewPDF,
@@ -239,10 +242,7 @@ async function createEngagement(req, res) {
     if (rawSig) {
       sigPath = saveBase64Signature(rawSig, "client");
     } else if (req.files && req.files.signatureUploadedFile && req.files.signatureUploadedFile.length > 0) {
-      const sigFile = req.files.signatureUploadedFile[0];
-      const mFolder = path.basename(path.dirname(sigFile.path));
-      const yFolder = path.basename(path.dirname(path.dirname(sigFile.path)));
-      sigPath = `/uploads/documents/${yFolder}/${mFolder}/${sigFile.filename}`;
+      sigPath = uploadUrlOf(req.files.signatureUploadedFile[0].path);
     }
 
     await NewIndividualSignature.create(
@@ -343,9 +343,7 @@ async function createEngagement(req, res) {
       for (const [fieldName, fileArr] of Object.entries(req.files)) {
         if (Array.isArray(fileArr) && fileArr.length > 0) {
           for (const file of fileArr) {
-            const monthFolder = path.basename(path.dirname(file.path));
-            const yearFolder = path.basename(path.dirname(path.dirname(file.path)));
-            const relPath = `/uploads/documents/${yearFolder}/${monthFolder}/${file.filename}`;
+            const relPath = uploadUrlOf(file.path);
 
             await NewIndividualDocument.create(
               {
@@ -399,7 +397,7 @@ async function createEngagement(req, res) {
       await engagement.update({ clientPdfPath, adminPdfPath });
 
       // Dispatch Email with Client PDF Attachment
-      const fullPdfPath = path.join(__dirname, "../public", clientPdfPath);
+      const fullPdfPath = diskPathOfUpload(clientPdfPath);
       sendClientSubmissionEmail(client.email, client.fullName, referenceNumber, fullPdfPath);
     } catch (pdfErr) {
       console.error("Async PDF/Email error:", pdfErr);
@@ -475,7 +473,11 @@ async function submitAdminDecision(req, res) {
 
     // The signer is the logged-in staff member (route requires authentication);
     // the typed name is only a fallback for older clients
-    const staffName = req.user?.fullName || body.staffMemberName || body.taxAgentName || "Financially Up Tax Agent";
+    const staffName =
+      req.user?.fullName ||
+      body.staffMemberName ||
+      body.taxAgentName ||
+      brandText("Financially Up Tax Agent", await getSettingsMap().catch(() => ({})));
     const decision = body.decision || body.status || "Accepted";
     const riskLevel = body.riskLevel || engagement.riskLevel || "Low";
     const reviewNotes = typeof body.reviewNotes === "string" ? body.reviewNotes : (body.notes || "");
@@ -493,11 +495,7 @@ async function submitAdminDecision(req, res) {
     if (sigType === "draw" && body.staffDrawnSignature) {
       staffSigPath = saveBase64Signature(body.staffDrawnSignature, "signatures");
     } else if (sigType === "upload" && files.staffUploadedSignature && files.staffUploadedSignature[0]) {
-      const f = files.staffUploadedSignature[0];
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, "0");
-      staffSigPath = `/uploads/signatures/${year}/${month}/${f.filename}`;
+      staffSigPath = uploadUrlOf(files.staffUploadedSignature[0].path);
     }
 
     if (staffSigPath || body.staffTypedSignature) {
@@ -611,7 +609,7 @@ async function submitAdminDecision(req, res) {
     try {
       const clientEmail = engagement.client?.email;
       const fullName = engagement.client?.fullName || "Client";
-      const fullAcceptancePdfPath = acceptancePdfPath ? path.join(__dirname, "../public", acceptancePdfPath) : null;
+      const fullAcceptancePdfPath = acceptancePdfPath ? diskPathOfUpload(acceptancePdfPath) : null;
       if (clientEmail) {
         sendAdminDecisionEmail(clientEmail, fullName, engagement.referenceNumber, mappedStatus, staffName, reviewNotes, fullAcceptancePdfPath);
       }

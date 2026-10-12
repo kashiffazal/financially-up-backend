@@ -39,10 +39,11 @@ if (fs.existsSync(envPath)) {
 // Ensure storage directories exist on server startup
 const ensureStorageDirs = () => {
   const dirs = [
-    path.join(__dirname, "public/uploads"),
-    path.join(__dirname, "public/uploads/pdf"),
-    path.join(__dirname, "public/uploads/signatures"),
-    path.join(__dirname, "public/uploads/documents"),
+    path.join(__dirname, "public/uploads/blog"),
+    // Client files: private, outside public/ (utils/privateFiles.js)
+    path.join(__dirname, "storage/uploads/pdf"),
+    path.join(__dirname, "storage/uploads/signatures"),
+    path.join(__dirname, "storage/uploads/documents"),
   ];
   for (const d of dirs) {
     if (!fs.existsSync(d)) {
@@ -74,12 +75,14 @@ const initDatabase = async (retries = 3, delayMs = 3000) => {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       console.log(`⏳ [Attempt ${attempt}/${retries}] Connecting to MySQL database...`);
+      require("./utils/siteConfig").warnIfDomainsMissing();
       console.log("========== DATABASE CONFIG ==========");
       console.log({
         DB_HOST: process.env.DB_HOST,
         DB_PORT: process.env.DB_PORT,
-        DB_NAME: process.env.DB_NAME,
-        DB_USER: process.env.DB_USER,
+        DB_PREFIX: process.env.DB_PREFIX || "(none)",
+        DB_NAME: sequelize.config.database,
+        DB_USER: sequelize.config.username,
         DB_PASSWORD: process.env.DB_PASSWORD ? "******" : "(empty)",
       });
       console.log("=====================================");
@@ -100,6 +103,8 @@ const initDatabase = async (retries = 3, delayMs = 3000) => {
         await sequelize.query("ALTER TABLE new_individual_engagements ADD COLUMN tfnExplanation TEXT NULL").catch(() => {});
         await sequelize.query("ALTER TABLE new_individual_engagements ADD COLUMN incomeActivities JSON NULL").catch(() => {});
         await sequelize.query("ALTER TABLE new_individual_engagements ADD COLUMN basScope VARCHAR(100) NULL").catch(() => {});
+        // Newsletter: subscriber name
+        await sequelize.query("ALTER TABLE newsletter_subscribers ADD COLUMN name VARCHAR(120) NULL AFTER id").catch(() => {});
         // Users: forced password change after an admin sets the password
         await sequelize.query("ALTER TABLE user_main ADD COLUMN must_change_password TINYINT(1) NOT NULL DEFAULT 0").catch(() => {});
         // Declined consents are recorded with a NULL acceptedAt
@@ -171,6 +176,22 @@ const initDatabase = async (retries = 3, delayMs = 3000) => {
         await alignNotificationPermissions();
       } catch (alignError) {
         console.error("Notification permission clean-up failed:", alignError.message);
+      }
+
+      // Settings > Email: import the .env mailbox once (email keeps working as before)
+      try {
+        const { seedEmailSettings } = require("./utils/emailSeed");
+        await seedEmailSettings();
+      } catch (emailSeedError) {
+        console.error("Email settings import failed (email still works from .env):", emailSeedError.message);
+      }
+
+      // Client files: private folder + unguessable names (does nothing once done)
+      try {
+        const { secureExistingUploads } = require("./utils/secureUploads");
+        await secureExistingUploads();
+      } catch (secureError) {
+        console.error("Securing existing uploads failed:", secureError.message);
       }
       console.log("✅ Global settings seeding completed.");
       return;

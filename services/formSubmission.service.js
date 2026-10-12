@@ -13,9 +13,7 @@
  * Status and other system fields can never be set by the client.
  */
 
-const path = require("path");
-
-const PUBLIC_DIR = path.join(__dirname, "../public");
+const { uploadUrlOf } = require("../utils/privateFiles");
 
 // Fields a public submission may never write
 const PROTECTED_FIELDS = new Set(["id", "status", "createdAt", "updatedAt", "submissionData", "adminNotes"]);
@@ -36,8 +34,8 @@ const parseValue = (value) => {
 
 const isEmpty = (v) => v === undefined || v === null || (typeof v === "string" && v.trim() === "");
 
-/** Public URL path of an uploaded file, e.g. /uploads/documents/2026/10/passport-123.pdf */
-const publicPathOf = (file) => `/${path.relative(PUBLIC_DIR, file.path).split(path.sep).join("/")}`;
+/** Link of an uploaded file, e.g. /uploads/documents/2026/10/passport-<random>.pdf */
+const publicPathOf = (file) => uploadUrlOf(file.path);
 
 /** "Jane Mary Smith" → { first: "Jane Mary", last: "Smith" } */
 const splitName = (fullName) => {

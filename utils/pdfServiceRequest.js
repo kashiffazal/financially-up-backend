@@ -4,7 +4,7 @@
  * Shared by services/individualPdf.service.js and services/newCompanyPdf.service.js.
  *
  * 1. embedSignatures(data)
- *    Signatures are stored here as files (public/uploads/signatures/...). The PHP
+ *    Signatures are stored here as files (storage/uploads/signatures/...). The PHP
  *    service runs on its own server in production and can't read this disk, so
  *    every signature path in the PDF data is replaced with the image itself
  *    (a base64 data URI) before the request is sent. PHP already accepts data URIs.
@@ -17,8 +17,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const PUBLIC_DIR = path.join(__dirname, "../public");
-const UPLOADS_DIR = path.join(PUBLIC_DIR, "uploads");
+const { diskPathOfUpload } = require("./privateFiles");
 const SIGNATURE_KEY = /signature(FilePath|Data|Path|Url)?$/i;
 const MIME = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif" };
 const MAX_SIGNATURE_BYTES = 2 * 1024 * 1024;
@@ -26,20 +25,13 @@ const MAX_SIGNATURE_BYTES = 2 * 1024 * 1024;
 /** "uploads/signatures/x.png" | "/api/uploads/..." | full URL -> data URI, or null. */
 const signatureFileToDataUri = (value) => {
   if (typeof value !== "string" || !value || value.startsWith("data:")) return null;
-  let rel = value;
-  try {
-    if (/^https?:\/\//i.test(rel)) rel = new URL(rel).pathname;
-  } catch {
-    return null;
-  }
-  rel = decodeURIComponent(rel).replace(/\\/g, "/").replace(/^\/+/, "").replace(/^api\//, "");
-  if (!rel.startsWith("uploads/")) rel = `uploads/${rel}`;
-
-  const fullPath = path.resolve(PUBLIC_DIR, rel);
-  // Only files inside public/uploads, only images, only reasonable sizes
-  if (!fullPath.startsWith(UPLOADS_DIR + path.sep)) return null;
+  // Bare "signatures/x.png" counts as an uploads path too
+  const link = /^(https?:\/\/|\/?(api\/)?uploads\/)/i.test(value) ? value : `uploads/${value.replace(/^\/+/, "")}`;
+  // Only files inside the uploads folders, only images, only reasonable sizes
+  const fullPath = diskPathOfUpload(link);
+  if (!fullPath) return null;
   const mime = MIME[path.extname(fullPath).toLowerCase()];
-  if (!mime || !fs.existsSync(fullPath)) return null;
+  if (!mime) return null;
   const stat = fs.statSync(fullPath);
   if (!stat.isFile() || stat.size > MAX_SIGNATURE_BYTES) return null;
 
@@ -75,4 +67,15 @@ const pdfServiceHeaders = () => {
   return headers;
 };
 
-module.exports = { embedSignatures, pdfServiceHeaders, signatureFileToDataUri };
+/**
+ * Sent with every PDF request so the PHP service needs no domain or settings
+ * lookup of its own: this API's address (links to uploaded files) and the
+ * company details from Settings.
+ */
+const pdfServiceContext = async () => {
+  const { apiUrl } = require("./siteConfig");
+  const { getSettingsMap } = require("../services/settings.service");
+  return { apiUrl: apiUrl(), settings: await getSettingsMap().catch(() => ({})) };
+};
+
+module.exports = { embedSignatures, pdfServiceHeaders, pdfServiceContext, signatureFileToDataUri };

@@ -9,6 +9,7 @@
 
 const settingsService = require("../services/settings.service");
 const auditService = require("../services/audit.service");
+const { refreshWebsite } = require("../utils/websiteRefresh");
 
 /**
  * GET /api/settings - flat { key: value } map (no authentication required)
@@ -47,6 +48,8 @@ async function updateSettings(req, res) {
     }
 
     const { updated, ignored } = await settingsService.updateSettings(updates);
+    // Company details appear on every website page: refresh its cache now
+    if (updated.length) refreshWebsite(["settings"]);
 
     await auditService.log({
       actorUserId: req.user?.id || null,

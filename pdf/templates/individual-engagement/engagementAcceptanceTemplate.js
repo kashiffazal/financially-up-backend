@@ -18,7 +18,7 @@ function getLogoBase64Uri() {
     }
   } catch (e) {}
   return (
-    process.env.COMPANY_LOGO_URL || "http://localhost:5000/images/logo.png"
+    process.env.COMPANY_LOGO_URL || `${require("../../../utils/siteConfig").apiUrl()}/images/logo.png`
   );
 }
 

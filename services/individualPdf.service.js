@@ -12,17 +12,17 @@
 
 const fs = require("fs");
 const path = require("path");
-const { embedSignatures, pdfServiceHeaders } = require("../utils/pdfServiceRequest");
+const { embedSignatures, pdfServiceHeaders, pdfServiceContext } = require("../utils/pdfServiceRequest");
+const { privateMonthDir, securePdfName } = require("../utils/privateFiles");
+const { brandText } = require("../utils/brand");
+const { getSettingsMap } = require("./settings.service");
 const NewIndividualPdf = require("../models/NewIndividualPdf");
 
 /**
  * Resolves the PHP mPDF service base URL from environment
  */
 function getPhpPdfServerUrl() {
-  return (
-    process.env.PHP_PDF_SERVER_URL ||
-    "http://localhost/myProjects/nextjs/financially-up/financially-up-php-backend"
-  );
+  return require("../utils/siteConfig").phpPdfServerUrl();
 }
 
 /**
@@ -50,6 +50,7 @@ async function renderIndividualPdfViaPhp(type, data, fullPath, fileName, relPath
       method: "POST",
       headers: pdfServiceHeaders(),
       body: JSON.stringify({
+        ...(await pdfServiceContext()),
         type,
         // Signature images travel inside the request (the PHP server can't read this disk)
         data: embedSignatures(data),
@@ -67,7 +68,8 @@ async function renderIndividualPdfViaPhp(type, data, fullPath, fileName, relPath
     const result = await response.json();
     if (result && result.success) {
       // If PHP returned base64 and file was not written directly on local disk, write it now
-      if (result.pdfBase64 && !fs.existsSync(fullPath)) {
+      // Always keep the copy PHP returned (it may run on another server, and a rebuilt PDF must replace the old file)
+      if (result.pdfBase64) {
         const buffer = Buffer.from(result.pdfBase64, "base64");
         fs.writeFileSync(fullPath, buffer);
       }
@@ -90,6 +92,7 @@ async function renderIndividualPdfViaPhp(type, data, fullPath, fileName, relPath
  * @returns {Promise<boolean>}
  */
 async function renderHtmlToPdf(htmlContent, fullPath, title = "Financially Up Document") {
+  title = brandText(title, await getSettingsMap().catch(() => ({})));
   const dir = path.dirname(fullPath);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
@@ -107,6 +110,7 @@ async function renderHtmlToPdf(htmlContent, fullPath, title = "Financially Up Do
       method: "POST",
       headers: pdfServiceHeaders(),
       body: JSON.stringify({
+        ...(await pdfServiceContext()),
         html: htmlContent,
         title,
         savePath: fullPath,
@@ -116,7 +120,8 @@ async function renderHtmlToPdf(htmlContent, fullPath, title = "Financially Up Do
 
     const result = await response.json();
     if (result && result.success) {
-      if (result.pdfBase64 && !fs.existsSync(fullPath)) {
+      // Always keep the copy PHP returned (it may run on another server, and a rebuilt PDF must replace the old file)
+      if (result.pdfBase64) {
         const buffer = Buffer.from(result.pdfBase64, "base64");
         fs.writeFileSync(fullPath, buffer);
       }
@@ -161,16 +166,11 @@ async function savePdfRecord(engagementId, type, fileName, filePath, generatedBy
  */
 async function generateClientEngagementPDF(data) {
   const referenceNumber = data.referenceNumber || `NENG-${Date.now()}`;
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-
-  const pdfDir = path.join(__dirname, "../public/uploads/pdf", `${year}/${month}`);
-  if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir, { recursive: true });
-
-  const fileName = `${referenceNumber}_Client_Engagement.pdf`;
+  // Private folder + unguessable name (utils/privateFiles.js)
+  const { dir: pdfDir, urlBase } = privateMonthDir("pdf");
+  const fileName = securePdfName(referenceNumber, "Client_Engagement");
   const fullPath = path.join(pdfDir, fileName);
-  const relPath = `/uploads/pdf/${year}/${month}/${fileName}`;
+  const relPath = `${urlBase}/${fileName}`;
 
   await renderIndividualPdfViaPhp("ClientEngagement", data, fullPath, fileName, relPath);
 
@@ -186,16 +186,11 @@ async function generateClientEngagementPDF(data) {
  */
 async function generateAdminReviewPDF(data) {
   const referenceNumber = data.referenceNumber || `NENG-${Date.now()}`;
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-
-  const pdfDir = path.join(__dirname, "../public/uploads/pdf", `${year}/${month}`);
-  if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir, { recursive: true });
-
-  const fileName = `${referenceNumber}_Admin_Review.pdf`;
+  // Private folder + unguessable name (utils/privateFiles.js)
+  const { dir: pdfDir, urlBase } = privateMonthDir("pdf");
+  const fileName = securePdfName(referenceNumber, "Admin_Review");
   const fullPath = path.join(pdfDir, fileName);
-  const relPath = `/uploads/pdf/${year}/${month}/${fileName}`;
+  const relPath = `${urlBase}/${fileName}`;
 
   await renderIndividualPdfViaPhp("AdminReview", data, fullPath, fileName, relPath);
 
@@ -210,17 +205,13 @@ async function generateAdminReviewPDF(data) {
  * 3. Generate Engagement Acceptance PDF
  */
 async function generateEngagementAcceptancePDF(data, taxAgentName = "Financially Up Tax Agent") {
+  taxAgentName = brandText(taxAgentName, await getSettingsMap().catch(() => ({})));
   const referenceNumber = data.referenceNumber || `NENG-${Date.now()}`;
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-
-  const pdfDir = path.join(__dirname, "../public/uploads/pdf", `${year}/${month}`);
-  if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir, { recursive: true });
-
-  const fileName = `${referenceNumber}_Engagement_Acceptance.pdf`;
+  // Private folder + unguessable name (utils/privateFiles.js)
+  const { dir: pdfDir, urlBase } = privateMonthDir("pdf");
+  const fileName = securePdfName(referenceNumber, "Engagement_Acceptance");
   const fullPath = path.join(pdfDir, fileName);
-  const relPath = `/uploads/pdf/${year}/${month}/${fileName}`;
+  const relPath = `${urlBase}/${fileName}`;
 
   await renderIndividualPdfViaPhp("EngagementAcceptance", data, fullPath, fileName, relPath, {
     staffName: taxAgentName,
@@ -238,16 +229,11 @@ async function generateEngagementAcceptancePDF(data, taxAgentName = "Financially
  */
 async function generateAuditReportPDF(data, auditorName = "Compliance Auditor") {
   const referenceNumber = data.referenceNumber || `NENG-${Date.now()}`;
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-
-  const pdfDir = path.join(__dirname, "../public/uploads/pdf", `${year}/${month}`);
-  if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir, { recursive: true });
-
-  const fileName = `${referenceNumber}_Audit_Report.pdf`;
+  // Private folder + unguessable name (utils/privateFiles.js)
+  const { dir: pdfDir, urlBase } = privateMonthDir("pdf");
+  const fileName = securePdfName(referenceNumber, "Audit_Report");
   const fullPath = path.join(pdfDir, fileName);
-  const relPath = `/uploads/pdf/${year}/${month}/${fileName}`;
+  const relPath = `${urlBase}/${fileName}`;
 
   await renderIndividualPdfViaPhp("AuditReport", data, fullPath, fileName, relPath, {
     auditorName,

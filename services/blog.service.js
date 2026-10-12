@@ -170,7 +170,7 @@ const sortCategories = (cats = []) => [...cats].sort((a, b) => (a.parentId ? 1 :
  * Website shape (matches what the /blog pages render).
  * `category` is the post's main (first top-level) category name.
  */
-const toPublicPost = (post) => {
+const toPublicPost = (post, companyName = "Financially Up") => {
   const p = post.get ? post.get({ plain: true }) : { ...post };
   p.structuredContent = parseJson(p.structuredContent);
   const categories = sortCategories(p.categories || []);
@@ -193,9 +193,9 @@ const toPublicPost = (post) => {
     readTime: `${p.readTimeMinutes || 1} min read`,
     featured: Boolean(p.featured),
     author: {
-      name: p.authorName || "Financially Up",
+      name: p.authorName || companyName,
       role: p.authorRole || "",
-      avatar: initials(p.authorName || "Financially Up"),
+      avatar: initials(p.authorName || companyName),
       qualifications: p.authorQualifications || "",
     },
     // Exactly one of these is set: imported posts keep their sectioned layout
@@ -247,20 +247,10 @@ const toAdminPost = (post) => {
 
 /**
  * Ask the Next.js website to refresh its cached blog pages right away
- * (POST {NEW_APP_URL}/api/revalidate). Without REVALIDATE_SECRET the website
+ * (POST {SITE_URL}/api/revalidate). Without REVALIDATE_SECRET the website
  * still picks up changes within 60 seconds on its own.
  */
-const refreshWebsiteBlog = () => {
-  const secret = process.env.REVALIDATE_SECRET;
-  const base = (process.env.NEW_APP_URL || "").replace(/\/+$/, "");
-  if (!secret || !base) return;
-  fetch(`${base}/api/revalidate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-revalidate-secret": secret },
-    body: JSON.stringify({ tags: ["blog"] }),
-    signal: AbortSignal.timeout(5000),
-  }).catch((error) => console.warn("[Blog] Website refresh failed (it will update within 60s):", error.message));
-};
+const refreshWebsiteBlog = () => require("../utils/websiteRefresh").refreshWebsite(["blog"]);
 
 module.exports = {
   slugify,
