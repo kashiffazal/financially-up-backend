@@ -131,6 +131,9 @@ const list = async (req, res) => {
     const { status, search, from, to } = req.query;
     const where = {};
     if (STATUSES.includes(status)) where.status = status;
+    // Exports leave out trashed subscribers (the admin list loads them for its Trash tab)
+    // (under Op.and, so the name / email search below can't replace it)
+    else if (req.query.excludeTrash) where[Op.and] = [require("../services/trash.service").notTrashed];
     const q = clean(search, 190);
     if (q) {
       const like = { [Op.like]: `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%` };

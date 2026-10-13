@@ -97,7 +97,7 @@ const save = async (payload) => {
  * @param {string} modelName - Sequelize model name (e.g. "GstRegistration")
  * @param {object} record - Created record (instance or plain object)
  */
-const notifySubmission = async (modelName, record) => {
+const notifySubmission = async (modelName, record, { attachments = [] } = {}) => {
   try {
     const mod = MODULES_BY_MODEL[modelName];
     if (!mod || !record) return null;
@@ -114,6 +114,7 @@ const notifySubmission = async (modelName, record) => {
         clientName: info.displayName,
         email: info.email,
         phone: info.phone,
+        attachments,
       }).catch((error) => console.error(`[Notification] Staff email for ${info.reference} failed:`, error.message));
     }
 

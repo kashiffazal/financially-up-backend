@@ -444,9 +444,14 @@ async function getEngagements(req, res) {
       ],
       order: [["createdAt", "DESC"]],
     });
+    // pdfMissing: how many of its PDFs are not on the server ("Regenerate PDFs" rebuilds them)
+    const { missingPdfCount } = require("../services/pdfRegenerate.service");
     return res.status(200).json({
       success: true,
-      data: engagements,
+      data: engagements.map((row) => {
+        const value = row.toJSON();
+        return { ...value, pdfMissing: missingPdfCount("new-individual", value) };
+      }),
     });
   } catch (error) {
     console.error("Error fetching engagements:", error);

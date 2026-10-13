@@ -3,86 +3,29 @@
  * =========================================
  * Generates and tracks 4 Individual Engagement PDF types in `new_individual_pdfs`:
  * 1. Client Engagement PDF (Client copy on submission)
- * 2. Admin Review PDF (Internal staff package on submission)
+ * 2. Admin Review PDF (Internal staff package on submission, again at each decision)
  * 3. Engagement Acceptance PDF (Client official acceptance notice on Tax Agent approval)
- * 4. Audit Report PDF (Compliance audit log report on demand)
+ * 4. Audit Report PDF (Compliance audit log report at each decision)
  *
- * Utilizes the lightweight, reliable PHP mPDF backend service instead of Puppeteer/Chromium.
+ * Rendering goes through services/pdfEngine.js. Each generator returns the PDF's
+ * link, or null when the PDF could not be made (nothing is recorded then, so the
+ * record shows the PDF as missing and "Regenerate PDFs" can rebuild it).
+ *
+ * Options (all optional, used by services/pdfRegenerate.service.js):
+ *   asOf, settings   fixed inputs so a rebuild is identical to the original
+ *   targetRelPath    write to this existing file instead of a new one
+ *   generatedBy      PDF history label
+ *   version          keep this history version number (rebuild of the same PDF)
  */
 
 const fs = require("fs");
 const path = require("path");
-const { embedSignatures, pdfServiceHeaders, pdfServiceContext } = require("../utils/pdfServiceRequest");
-const { privateMonthDir, securePdfName } = require("../utils/privateFiles");
+const { pdfServiceHeaders, pdfServiceContext } = require("../utils/pdfServiceRequest");
+const getPhpPdfServerUrl = () => require("../utils/siteConfig").phpPdfServerUrl();
 const { brandText } = require("../utils/brand");
 const { getSettingsMap } = require("./settings.service");
+const { pdfTarget, pdfInputs, renderPdf, snapshotOf } = require("./pdfEngine");
 const NewIndividualPdf = require("../models/NewIndividualPdf");
-
-/**
- * Resolves the PHP mPDF service base URL from environment
- */
-function getPhpPdfServerUrl() {
-  return require("../utils/siteConfig").phpPdfServerUrl();
-}
-
-/**
- * Calls PHP mPDF backend service to render and save an Individual Engagement PDF
- * @param {string} type - 'ClientEngagement' | 'AdminReview' | 'EngagementAcceptance' | 'AuditReport'
- * @param {object} data - Full engagement record data
- * @param {string} fullPath - Target physical file path
- * @param {string} fileName - File name
- * @param {string} relPath - Relative web path
- * @param {object} extra - Optional extra parameters (e.g. staffName, auditorName)
- * @returns {Promise<boolean>}
- */
-async function renderIndividualPdfViaPhp(type, data, fullPath, fileName, relPath, extra = {}) {
-  // Ensure target directory exists
-  const dir = path.dirname(fullPath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-
-  const phpServerUrl = getPhpPdfServerUrl();
-  const endpoint = `${phpServerUrl}/forms-pdf-generation/individual-engagement/generate.php`;
-
-  try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: pdfServiceHeaders(),
-      body: JSON.stringify({
-        ...(await pdfServiceContext()),
-        type,
-        // Signature images travel inside the request (the PHP server can't read this disk)
-        data: embedSignatures(data),
-        savePath: fullPath,
-        fileName,
-        relPath,
-        ...extra,
-      }),
-    });
-
-    if (!response.ok) {
-      console.warn(`PHP PDF server returned HTTP ${response.status} for ${type}`);
-    }
-
-    const result = await response.json();
-    if (result && result.success) {
-      // If PHP returned base64 and file was not written directly on local disk, write it now
-      // Always keep the copy PHP returned (it may run on another server, and a rebuilt PDF must replace the old file)
-      if (result.pdfBase64) {
-        const buffer = Buffer.from(result.pdfBase64, "base64");
-        fs.writeFileSync(fullPath, buffer);
-      }
-      return true;
-    } else {
-      console.warn("PHP PDF generation error:", result?.error || "Unknown error");
-    }
-  } catch (err) {
-    console.error("Failed to connect to PHP PDF generation service:", err.message);
-  }
-
-  return false;
-}
 
 /**
  * Generates PDF file from arbitrary HTML string using PHP mPDF service
@@ -135,25 +78,22 @@ async function renderHtmlToPdf(htmlContent, fullPath, title = "Financially Up Do
 }
 
 /**
- * Saves versioned record into new_individual_pdfs database table
+ * Saves a versioned row in new_individual_pdfs (with the generation snapshot)
  */
-async function savePdfRecord(engagementId, type, fileName, filePath, generatedBy = "System") {
+async function savePdfRecord(engagementId, type, fileName, filePath, generatedBy = "System", { snapshot = null, version = null } = {}) {
   try {
-    const existingCount = await NewIndividualPdf.count({
-      where: { engagementId, type },
-    });
-    const version = existingCount + 1;
-
+    const nextVersion = version || (await NewIndividualPdf.count({ where: { engagementId, type } })) + 1;
     return await NewIndividualPdf.create({
       engagementId,
       type,
       fileName,
       filePath,
-      version,
+      version: nextVersion,
       templateVersion: "v2.0.0 (mPDF)",
       generatedBy,
       generatedAt: new Date(),
       emailSent: false,
+      snapshot,
     });
   } catch (err) {
     console.error(`Failed to record PDF metadata for ${type}:`, err.message);
@@ -161,89 +101,40 @@ async function savePdfRecord(engagementId, type, fileName, filePath, generatedBy
   }
 }
 
-/**
- * 1. Generate Client Engagement PDF
- */
-async function generateClientEngagementPDF(data) {
-  const referenceNumber = data.referenceNumber || `NENG-${Date.now()}`;
-  // Private folder + unguessable name (utils/privateFiles.js)
-  const { dir: pdfDir, urlBase } = privateMonthDir("pdf");
-  const fileName = securePdfName(referenceNumber, "Client_Engagement");
-  const fullPath = path.join(pdfDir, fileName);
-  const relPath = `${urlBase}/${fileName}`;
-
-  await renderIndividualPdfViaPhp("ClientEngagement", data, fullPath, fileName, relPath);
-
+/** Render one Individual Engagement PDF and record it. @returns {Promise<string|null>} link or null */
+async function generateIndividualPdf(type, label, data, extra = {}, options = {}) {
+  const target = pdfTarget({ reference: data.referenceNumber || `NENG-${Date.now()}`, label, targetRelPath: options.targetRelPath });
+  const inputs = await pdfInputs(options);
+  const ok = await renderPdf({ form: "individual-engagement", type, data, extra, ...inputs, ...target });
+  if (!ok) return null;
   if (data.id) {
-    await savePdfRecord(data.id, "ClientEngagement", fileName, relPath, "System");
+    await savePdfRecord(data.id, type, target.fileName, target.relPath, options.generatedBy || extra.staffName || extra.auditorName || "System", {
+      snapshot: snapshotOf({ type, data, extra, ...inputs }),
+      version: options.version,
+    });
   }
-
-  return relPath;
+  return target.relPath;
 }
 
-/**
- * 2. Generate Admin Review PDF
- */
-async function generateAdminReviewPDF(data) {
-  const referenceNumber = data.referenceNumber || `NENG-${Date.now()}`;
-  // Private folder + unguessable name (utils/privateFiles.js)
-  const { dir: pdfDir, urlBase } = privateMonthDir("pdf");
-  const fileName = securePdfName(referenceNumber, "Admin_Review");
-  const fullPath = path.join(pdfDir, fileName);
-  const relPath = `${urlBase}/${fileName}`;
-
-  await renderIndividualPdfViaPhp("AdminReview", data, fullPath, fileName, relPath);
-
-  if (data.id) {
-    await savePdfRecord(data.id, "AdminReview", fileName, relPath, "System");
-  }
-
-  return relPath;
+/** 1. Client Engagement PDF */
+async function generateClientEngagementPDF(data, options = {}) {
+  return generateIndividualPdf("ClientEngagement", "Client_Engagement", data, {}, options);
 }
 
-/**
- * 3. Generate Engagement Acceptance PDF
- */
-async function generateEngagementAcceptancePDF(data, taxAgentName = "Financially Up Tax Agent") {
-  taxAgentName = brandText(taxAgentName, await getSettingsMap().catch(() => ({})));
-  const referenceNumber = data.referenceNumber || `NENG-${Date.now()}`;
-  // Private folder + unguessable name (utils/privateFiles.js)
-  const { dir: pdfDir, urlBase } = privateMonthDir("pdf");
-  const fileName = securePdfName(referenceNumber, "Engagement_Acceptance");
-  const fullPath = path.join(pdfDir, fileName);
-  const relPath = `${urlBase}/${fileName}`;
-
-  await renderIndividualPdfViaPhp("EngagementAcceptance", data, fullPath, fileName, relPath, {
-    staffName: taxAgentName,
-  });
-
-  if (data.id) {
-    await savePdfRecord(data.id, "EngagementAcceptance", fileName, relPath, taxAgentName);
-  }
-
-  return relPath;
+/** 2. Admin Review PDF */
+async function generateAdminReviewPDF(data, options = {}) {
+  return generateIndividualPdf("AdminReview", "Admin_Review", data, {}, options);
 }
 
-/**
- * 4. Generate Audit Report PDF
- */
-async function generateAuditReportPDF(data, auditorName = "Compliance Auditor") {
-  const referenceNumber = data.referenceNumber || `NENG-${Date.now()}`;
-  // Private folder + unguessable name (utils/privateFiles.js)
-  const { dir: pdfDir, urlBase } = privateMonthDir("pdf");
-  const fileName = securePdfName(referenceNumber, "Audit_Report");
-  const fullPath = path.join(pdfDir, fileName);
-  const relPath = `${urlBase}/${fileName}`;
+/** 3. Engagement Acceptance PDF */
+async function generateEngagementAcceptancePDF(data, taxAgentName = "Financially Up Tax Agent", options = {}) {
+  const staffName = brandText(taxAgentName, await getSettingsMap().catch(() => ({})));
+  return generateIndividualPdf("EngagementAcceptance", "Engagement_Acceptance", data, { staffName }, options);
+}
 
-  await renderIndividualPdfViaPhp("AuditReport", data, fullPath, fileName, relPath, {
-    auditorName,
-  });
-
-  if (data.id) {
-    await savePdfRecord(data.id, "AuditReport", fileName, relPath, auditorName);
-  }
-
-  return relPath;
+/** 4. Audit Report PDF */
+async function generateAuditReportPDF(data, auditorName = "Compliance Auditor", options = {}) {
+  return generateIndividualPdf("AuditReport", "Audit_Report", data, { auditorName }, options);
 }
 
 module.exports = {
@@ -251,6 +142,7 @@ module.exports = {
   generateAdminReviewPDF,
   generateEngagementAcceptancePDF,
   generateAuditReportPDF,
+  generateIndividualPdf,
   renderHtmlToPdf,
   savePdfRecord,
 };

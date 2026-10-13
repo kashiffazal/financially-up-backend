@@ -135,158 +135,17 @@ async function dynamicPdfViewer(req, res, next) {
       return res.send(transparentPixel);
     }
 
-    // 3. If .pdf requested, generate binary PDF from MySQL database
+    // 3. A missing PDF is never replaced by a substitute (it would not match what the
+    //    client received): say so, and point to "Regenerate PDFs" in the admin log.
     if (reqPath.endsWith(".pdf")) {
-      const htmlPath = diskPath.replace(/\.pdf$/, ".html");
-
-      loadDependencies();
-      const filename = path.basename(reqPath);
-
-      // Individual Engagement whose saved PDF links include this exact file
-      if (models?.NewIndividualEngagement) {
-        let engagement = null;
-        engagement = await models.NewIndividualEngagement.findOne({
-          where: {
-            [Op.or]: [
-              { clientPdfPath: { [Op.like]: `%${filename}%` } },
-              { adminPdfPath: { [Op.like]: `%${filename}%` } },
-              { acceptancePdfPath: { [Op.like]: `%${filename}%` } },
-              { auditPdfPath: { [Op.like]: `%${filename}%` } },
-            ],
-          },
-          include: [
-            "client",
-            "services",
-            "identity",
-            "documents",
-            "signatures",
-            "auditLogs",
-            "adminReview",
-          ],
-        });
-
-        // Also check by filename directly in NewIndividualPdf table
-        if (!engagement && models.NewIndividualPdf) {
-          const pdfRow = await models.NewIndividualPdf.findOne({
-            where: { fileName: filename },
-          });
-          if (pdfRow?.engagementId) {
-            engagement = await models.NewIndividualEngagement.findByPk(pdfRow.engagementId, {
-              include: [
-                "client",
-                "services",
-                "identity",
-                "documents",
-                "signatures",
-                "auditLogs",
-                "adminReview",
-              ],
-            });
-          }
-        }
-
-        if (engagement) {
-          let renderedHtml = null;
-          if (filename.includes("Client_Engagement")) {
-            renderedHtml = individualTemplates.renderClientEngagementHtml(engagement);
-          } else if (filename.includes("Admin_Review")) {
-            renderedHtml = individualTemplates.renderAdminReviewHtml(engagement);
-          } else if (filename.includes("Engagement_Acceptance")) {
-            renderedHtml = individualTemplates.renderEngagementAcceptanceHtml(engagement);
-          } else if (filename.includes("Audit_Report")) {
-            renderedHtml = individualTemplates.renderAuditReportHtml(engagement);
-          }
-
-          if (renderedHtml) {
-            // Company name, phone, address... follow Settings > Company Details
-            renderedHtml = brandText(renderedHtml, await getSettingsMap().catch(() => ({})));
-            const dir = path.dirname(diskPath);
-            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-            fs.writeFileSync(htmlPath, renderedHtml);
-
-            if (renderHtmlToPdf) {
-              try {
-                await renderHtmlToPdf(renderedHtml, diskPath);
-              } catch (pdfGenErr) {
-                console.warn("PDF compilation notice:", pdfGenErr.message);
-              }
-            }
-
-            if (fs.existsSync(diskPath) && fs.statSync(diskPath).isFile()) {
-              res.setHeader("Content-Type", "application/pdf");
-              res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
-              return res.sendFile(diskPath);
-            }
-
-            // If Puppeteer could not compile binary PDF, serve styled HTML fallback
-            res.setHeader("Content-Type", "text/html; charset=utf-8");
-            return res.send(renderedHtml);
-          }
-        }
-      }
-
-      // Company Registration whose saved PDF links include this exact file
-      if (models?.NewCompanyRegistration) {
-        let registration = null;
-        registration = await models.NewCompanyRegistration.findOne({
-          where: {
-            [Op.or]: [
-              { clientPdfPath: { [Op.like]: `%${filename}%` } },
-              { adminPdfPath: { [Op.like]: `%${filename}%` } },
-            ],
-          },
-          include: [
-            "officeholders",
-            "shareholders",
-            "beneficialOwners",
-            "documents",
-            "consents",
-            "adminReview",
-            "pdfs",
-            "auditLogs",
-          ],
-        });
-
-        if (registration) {
-          let renderedHtml = null;
-          if (filename.includes("Client_Application") || filename.includes("Application")) {
-            renderedHtml = companyTemplates.renderClientApplicationHtml(registration);
-          } else if (filename.includes("Admin_Review")) {
-            renderedHtml = companyTemplates.renderAdminReviewHtml(registration);
-          }
-
-          if (renderedHtml) {
-            // Company name, phone, address... follow Settings > Company Details
-            renderedHtml = brandText(renderedHtml, await getSettingsMap().catch(() => ({})));
-            const dir = path.dirname(diskPath);
-            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-            fs.writeFileSync(htmlPath, renderedHtml);
-
-            if (renderHtmlToPdf) {
-              try {
-                await renderHtmlToPdf(renderedHtml, diskPath);
-              } catch (pdfGenErr) {
-                console.warn("Company PDF compilation notice:", pdfGenErr.message);
-              }
-            }
-
-            if (fs.existsSync(diskPath) && fs.statSync(diskPath).isFile()) {
-              res.setHeader("Content-Type", "application/pdf");
-              res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
-              return res.sendFile(diskPath);
-            }
-
-            res.setHeader("Content-Type", "text/html; charset=utf-8");
-            return res.send(renderedHtml);
-          }
-        }
-      }
-
-      // If .html companion already exists on disk
-      if (fs.existsSync(htmlPath) && fs.statSync(htmlPath).isFile()) {
-        res.setHeader("Content-Type", "text/html; charset=utf-8");
-        return res.sendFile(htmlPath);
-      }
+      res.status(404).setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.send(`<!doctype html><html><head><meta charset="utf-8"><title>PDF not available</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="font-family:system-ui,sans-serif;background:#f8fafc;color:#0f172a;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0">
+<div style="max-width:440px;padding:28px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;text-align:center">
+<h1 style="font-size:18px;margin:0 0 8px">This PDF is not available</h1>
+<p style="font-size:14px;color:#475569;margin:0">The file is missing on the server. Open the application in the admin panel and use
+<strong>Actions &gt; Regenerate PDFs</strong> to rebuild it from the saved data.</p></div></body></html>`);
     }
 
     return res.status(404).json({

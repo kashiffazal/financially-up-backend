@@ -14,7 +14,8 @@
  */
 
 const { Op, fn, col, where: sqlWhere } = require("sequelize");
-const models = require("../models");
+// Trashed applications never appear in search results
+const models = require("./trash.service").hideTrashed(require("../models"));
 const { canAccessModule, viewPermissionOf } = require("../utils/modulePermissions");
 
 // ============================

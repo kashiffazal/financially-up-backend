@@ -32,7 +32,8 @@ const NewIndividualEngagement = sequelize.define("new_individual_engagements", {
       "Request Information",
       "Enhanced Monitoring",
       "Escalate",
-      "Declined"
+      "Declined",
+      "Trash"
     ),
     allowNull: false,
     defaultValue: "Pending Review",

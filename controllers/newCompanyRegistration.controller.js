@@ -27,7 +27,14 @@ const NewCompanyAdminReview = require("../models/NewCompanyAdminReview");
 const NewCompanyPdf = require("../models/NewCompanyPdf");
 const NewCompanyAuditLog = require("../models/NewCompanyAuditLog");
 const { invalidateOutdatedConsents, createConsent, computeConsentHash } = require("../services/consentValidation.service");
-const { generateClientApplicationPDF, generateAdminReviewPDF, generateDirectorConsentPDFs, generateMemberConsentPDFs } = require("../services/newCompanyPdf.service");
+const {
+  generateClientApplicationPDF,
+  generateAdminReviewPDF,
+  generateAcceptancePDF,
+  generateDirectorConsentPDFs,
+  generateMemberConsentPDFs,
+} = require("../services/newCompanyPdf.service");
+const { COMPANY_ACCEPT_DECISIONS } = require("../services/pdfRegenerate.service");
 const notificationService = require("../services/notification.service");
 
 /** Lifecycle statuses an admin may set directly (matches COMPANY_REG_STATUS_LIST in the admin UI) */
@@ -466,8 +473,23 @@ async function createRegistration(req, res) {
       console.error("PDF generation error (non-blocking):", pdfErr);
     }
 
-    // Notify staff (fire-and-forget)
-    notificationService.notifySubmission("NewCompanyRegistration", registration);
+    // Emails (fire-and-forget), both with the Client Application PDF when it was generated:
+    // staff alert + receipt to the applicant's contact
+    const clientPdfFile = clientPdfPath ? diskPathOfUpload(clientPdfPath) : null;
+    const attachments = clientPdfFile ? [{ filename: `${referenceNumber}_Client_Application.pdf`, path: clientPdfFile }] : [];
+    notificationService.notifySubmission("NewCompanyRegistration", registration, { attachments });
+    if (body.contactEmail) {
+      require("../services/alertEmail.service")
+        .sendCompanyApplicationReceipt({
+          email: body.contactEmail,
+          name: body.contactName,
+          reference: referenceNumber,
+          companyName: body.companyName1 || registration.companyName1,
+          attachments,
+        })
+        .then(() => console.log(`[EMAIL SUCCESS] Company registration receipt sent for ${referenceNumber}`))
+        .catch((error) => console.error(`[EMAIL ERROR] Company registration receipt for ${referenceNumber}:`, error.message));
+    }
 
     return res.status(201).json({
       success: true,
@@ -523,10 +545,36 @@ async function getRegistrations(req, res) {
       offset,
     });
 
+    // Latest Director / Member Consent PDF of each person (links for the Actions menu)
+    const consentRows = rows.length
+      ? await NewCompanyPdf.findAll({
+          where: { registrationId: rows.map((r) => r.id), type: ["DirectorConsent", "MemberConsent"] },
+          attributes: ["registrationId", "type", "personName", "filePath"],
+          order: [["id", "ASC"]],
+          raw: true,
+        })
+      : [];
+    const consentPdfsOf = (registrationId) => {
+      const latest = new Map();
+      consentRows
+        .filter((c) => c.registrationId === registrationId)
+        .forEach((c) => latest.set(`${c.type}|${c.personName}`, c));
+      return [...latest.values()].map((c) => ({ type: c.type, personName: c.personName, filePath: c.filePath }));
+    };
+
     return res.status(200).json({
       success: true,
       data: {
-        records: rows,
+        // pdfMissing: how many of its PDFs are not on the server ("Regenerate PDFs" rebuilds them)
+        // consentPdfs: [{ type, personName, filePath }]
+        records: rows.map((row) => {
+          const value = row.toJSON();
+          return {
+            ...value,
+            consentPdfs: consentPdfsOf(value.id),
+            pdfMissing: require("../services/pdfRegenerate.service").missingPdfCount("new-company", value),
+          };
+        }),
         total: count,
         page: parseInt(page),
         totalPages: Math.ceil(count / parseInt(limit)),
@@ -639,6 +687,9 @@ async function updateShareholder(req, res) {
 
 /**
  * PUT /:id/decision — Admin AML/CTF review decision
+ * Saves the review + reviewer signature, sets the registration status, builds the
+ * Admin Compliance Review PDF and, when approved, the Notice of Acceptance (client
+ * + reviewer signatures). Then emails the client (every decision) and staff.
  */
 async function submitAdminDecision(req, res) {
   try {
@@ -654,12 +705,19 @@ async function submitAdminDecision(req, res) {
     const staffName = body.reviewerName || brandText("Financially Up Reviewer", await getSettingsMap().catch(() => ({})));
     const sigType = body.signatureMethod || "draw";
 
-    /* Process staff signature */
+    /* Process staff signature (editing a decision without re-signing keeps the saved one) */
+    const previousReview = await NewCompanyAdminReview.findOne({ where: { registrationId: id } });
     let staffSigPath = null;
     if (sigType === "draw" && body.signatureDrawnData) {
       staffSigPath = saveBase64Signature(body.signatureDrawnData, "signatures");
     } else if (sigType === "upload" && files.staffSignature && files.staffSignature[0]) {
       staffSigPath = uploadUrlOf(files.staffSignature[0].path);
+    }
+    if (!staffSigPath && previousReview?.signatureFilePath) staffSigPath = previousReview.signatureFilePath;
+    const staffDrawnData =
+      sigType === "draw" ? body.signatureDrawnData || previousReview?.signatureDrawnData || null : null;
+    if (!staffSigPath && !staffDrawnData) {
+      return res.status(400).json({ success: false, message: "Please sign the decision (reviewer signature)." });
     }
 
     /* Upsert admin review record */
@@ -682,7 +740,7 @@ async function submitAdminDecision(req, res) {
       signatureMethod: sigType,
       signatureFilePath: staffSigPath,
       signatureTypedName: body.signatureTypedName || null,
-      signatureDrawnData: sigType === "draw" ? body.signatureDrawnData : null,
+      signatureDrawnData: staffDrawnData,
       reviewStartedAt: body.reviewStartedAt || null,
       reviewedAt: new Date(),
       ipAddress: req.ip || "127.0.0.1",
@@ -703,17 +761,46 @@ async function submitAdminDecision(req, res) {
       notes: body.decisionNotes || null,
     });
 
-    /* Generate admin review PDF */
+    /* Generate the Admin Review PDF and, when approved, the Notice of Acceptance */
+    const decision = body.reviewStatus || "Completed";
+    const isAccepted = COMPANY_ACCEPT_DECISIONS.includes(decision);
     let adminPdfPath = null;
+    let acceptancePdfPath = null;
     try {
       const fullData = await NewCompanyRegistration.findByPk(id, {
         include: ["officeholders", "shareholders", "beneficialOwners", "documents", "adminReview"],
       });
       adminPdfPath = await generateAdminReviewPDF(fullData);
-      await registration.update({ adminPdfPath });
+      // Not made (PDF service down): keep the record as is; it shows the PDF as missing
+      if (adminPdfPath) await registration.update({ adminPdfPath });
+      if (isAccepted) {
+        acceptancePdfPath = await generateAcceptancePDF(fullData, { generatedBy: staffName });
+        if (acceptancePdfPath) await registration.update({ acceptancePdfPath });
+      }
     } catch (pdfErr) {
       console.error("Admin PDF generation error (non-blocking):", pdfErr);
     }
+
+    /* Emails: client (every decision, Acceptance attached when approved) + staff decision log */
+    const acceptanceFile = acceptancePdfPath ? diskPathOfUpload(acceptancePdfPath) : null;
+    require("../services/alertEmail.service")
+      .sendCompanyDecisionEmails({
+        email: registration.contactEmail,
+        name: registration.contactName || registration.signatory1Name,
+        reference: registration.referenceNumber,
+        companyName: registration.companyName1,
+        decision,
+        status: mappedStatus,
+        staffName,
+        notes: body.decisionNotes || null,
+        conditions: body.approvalConditions || null,
+        recordId: registration.id,
+        attachments:
+          acceptanceFile && fs.existsSync(acceptanceFile)
+            ? [{ filename: `${registration.referenceNumber}_Notice_of_Acceptance.pdf`, path: acceptanceFile }]
+            : [],
+      })
+      .catch((mailErr) => console.error(`[EMAIL] Company decision email for ${registration.referenceNumber} failed:`, mailErr.message));
 
     /* Audit log */
     await NewCompanyAuditLog.create({
@@ -727,7 +814,7 @@ async function submitAdminDecision(req, res) {
     return res.status(200).json({
       success: true,
       message: `Registration updated to ${mappedStatus}.`,
-      data: { status: mappedStatus, adminPdfPath },
+      data: { status: mappedStatus, adminPdfPath, acceptancePdfPath },
     });
   } catch (error) {
     console.error("Error submitting admin decision:", error);
@@ -813,38 +900,19 @@ async function getPdf(req, res) {
 }
 
 /**
- * POST /:id/regenerate-pdf — Regenerate PDFs on demand
+ * POST /:id/regenerate-pdf - rebuild this registration's PDFs, identical to the
+ * originals (same files and links). Same as POST /api/pdf-regenerate/new-company/:id.
  */
 async function regeneratePdf(req, res) {
   try {
-    const { id } = req.params;
-    const registration = await NewCompanyRegistration.findByPk(id, {
-      include: ["officeholders", "shareholders", "beneficialOwners", "documents", "adminReview"],
-    });
-
-    if (!registration) {
-      return res.status(404).json({ success: false, message: "Registration not found." });
-    }
-
-    const clientPdfPath = await generateClientApplicationPDF(registration);
-    const directorPdfs = await generateDirectorConsentPDFs(registration, registration.officeholders || []);
-    const memberPdfs = await generateMemberConsentPDFs(registration, registration.shareholders || []);
-
-    let adminPdfPath = null;
-    if (registration.adminReview) {
-      adminPdfPath = await generateAdminReviewPDF(registration);
-    }
-
-    await registration.update({ clientPdfPath, adminPdfPath: adminPdfPath || registration.adminPdfPath });
-
-    return res.status(200).json({
-      success: true,
-      message: "PDFs regenerated successfully.",
-      data: { clientPdfPath, adminPdfPath, directorPdfs, memberPdfs },
-    });
+    const { regenerateAll } = require("../services/pdfRegenerate.service");
+    const data = await regenerateAll("new-company", Number(req.params.id), req.user?.fullName || "staff");
+    if (!data) return res.status(404).json({ success: false, message: "Registration not found." });
+    const made = data.results.filter((r) => r.ok).length;
+    return res.status(200).json({ success: made > 0, message: `${made} of ${data.results.length} PDFs regenerated.`, data });
   } catch (error) {
     console.error("Error regenerating PDFs:", error);
-    return res.status(500).json({ success: false, message: "Failed to regenerate PDFs.", error: error.message });
+    return res.status(500).json({ success: false, message: "Failed to regenerate PDFs." });
   }
 }
 

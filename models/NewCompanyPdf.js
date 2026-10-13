@@ -26,7 +26,7 @@ const NewCompanyPdf = sequelize.define("new_company_pdfs", {
 
   /* ─── PDF Classification ─── */
   type: {
-    type: DataTypes.ENUM("ClientApplication", "AdminReview", "DirectorConsent", "MemberConsent"),
+    type: DataTypes.ENUM("ClientApplication", "AdminReview", "DirectorConsent", "MemberConsent", "Acceptance"),
     allowNull: false,
   },
   personName: {
@@ -40,6 +40,12 @@ const NewCompanyPdf = sequelize.define("new_company_pdfs", {
   filePath: { type: DataTypes.TEXT, allowNull: false },
   version: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
   templateVersion: { type: DataTypes.STRING(20), allowNull: false, defaultValue: "v1.0.0" },
+  // Exactly what the PDF was built from (data, settings, date) so "Regenerate PDFs"
+  // rebuilds an identical file (services/pdfRegenerate.service.js)
+  snapshot: {
+    type: DataTypes.TEXT("long"),
+    allowNull: true,
+  },
 
   /* ─── Generation Audit ─── */
   generatedBy: { type: DataTypes.STRING(100), allowNull: false, defaultValue: "System" },

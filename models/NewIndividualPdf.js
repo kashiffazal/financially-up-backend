@@ -55,6 +55,12 @@ const NewIndividualPdf = sequelize.define("new_individual_pdfs", {
     allowNull: false,
     defaultValue: false,
   },
+  // Exactly what the PDF was built from (data, settings, date) so "Regenerate PDFs"
+  // rebuilds an identical file (services/pdfRegenerate.service.js)
+  snapshot: {
+    type: DataTypes.TEXT("long"),
+    allowNull: true,
+  },
   emailSentAt: {
     type: DataTypes.DATE,
     allowNull: true,

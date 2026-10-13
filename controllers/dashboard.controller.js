@@ -36,7 +36,7 @@ const {
   BlogPost,
   ContactEnquiry,
   NewsletterSubscriber,
-} = require("../models");
+} = require("../services/trash.service").hideTrashed(require("../models")); // trashed applications are not counted
 const { canAccessModule, APPLICATION_MODULE_KEYS } = require("../utils/modulePermissions");
 
 /** Count only when the user may view the module (0 otherwise, without querying). */

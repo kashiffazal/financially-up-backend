@@ -24,6 +24,7 @@ const ContactEnquiry = require("./ContactEnquiry");
 const NewsletterSubscriber = require("./NewsletterSubscriber");
 const PasswordToken = require("./PasswordToken");
 const EmailAccount = require("./EmailAccount");
+const RecordTrash = require("./RecordTrash");
 
 // ============================
 // Blog (website /blog, managed at /admin/blog)
@@ -225,6 +226,7 @@ module.exports = {
   NewsletterSubscriber,
   PasswordToken,
   EmailAccount,
+  RecordTrash,
   // Blog
   BlogPost,
   BlogCategory,

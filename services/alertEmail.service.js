@@ -4,7 +4,10 @@
  * Emails sent on website activity (all use the branded layout in mail.service):
  *   - sendEnquiryStaffAlert()     staff inbox for "enquiries" (Settings > Email > Recipients), Reply-To = visitor
  *   - sendEnquiryConfirmation()   "we received your enquiry" to the visitor
- *   - sendApplicationStaffAlert() staff inbox of that form (its own recipients, else the default ones)
+ *   - sendApplicationStaffAlert() staff inbox of that form (its own recipients, else the default ones),
+ *                                 optionally with the application PDF attached
+ *   - sendCompanyApplicationReceipt() "we received your application" to the company
+ *                                 registration contact, with the Client Application PDF
  *
  * Every function throws on failure so callers can record the delivery status.
  */
@@ -84,9 +87,9 @@ const sendEnquiryConfirmation = async (enquiry) => {
 
 /**
  * Staff alert for a new application form submission.
- * @param {object} info - { moduleKey, moduleName, route, recordId, reference, clientName, email, phone }
+ * @param {object} info - { moduleKey, moduleName, route, recordId, reference, clientName, email, phone, attachments? }
  */
-const sendApplicationStaffAlert = async ({ moduleKey, moduleName, route, recordId, reference, clientName, email, phone }) => {
+const sendApplicationStaffAlert = async ({ moduleKey, moduleName, route, recordId, reference, clientName, email, phone, attachments = [] }) => {
   const { appUrl } = mailConfig();
   const { to: staffTo, cc: staffCc, bcc: staffBcc } = await getStaffRecipients(moduleKey);
   if (!staffTo.length) throw new Error("No staff recipients set (Settings > Email > Recipients).");
@@ -113,11 +116,137 @@ const sendApplicationStaffAlert = async ({ moduleKey, moduleName, route, recordI
     subject: `New ${moduleName} · ${clientName} · ${reference}`,
     html,
     text,
+    attachments,
   });
+};
+
+/**
+ * Receipt to the contact of a new Company Registration, with the Client
+ * Application PDF attached (when it was generated).
+ * @param {object} info - { email, name, reference, companyName, attachments }
+ */
+const sendCompanyApplicationReceipt = async ({ email, name, reference, companyName, attachments = [] }) => {
+  const { to: staffTo } = await getStaffRecipients("new-company");
+  const { html, text } = await renderEmail({
+    preheader: `We've received your company registration application (${reference}).`,
+    heading: `Thank you, ${name || "for your application"}`,
+    intro: attachments.length
+      ? "We've received your company registration application. A copy of your submitted application is attached to this email. Our team will review it and contact you if anything else is needed."
+      : "We've received your company registration application. Our team will review it and contact you if anything else is needed.",
+    reference,
+    rows: [
+      ["Application", "Company Registration"],
+      ["Proposed company name", companyName],
+    ],
+    footnote: "You're receiving this because you submitted a company registration application on our website. If this wasn't you, please contact us.",
+  });
+
+  return sendMail({
+    to: email,
+    replyTo: staffTo[0] || undefined,
+    subject: `Company Registration Application Received - Financially Up (Ref: ${reference})`,
+    html,
+    text,
+    attachments,
+  });
+};
+
+// What the client is told for each Review & Decision outcome
+const COMPANY_DECISION_INTROS = {
+  Approved:
+    "Good news - your company registration application has been approved. Your signed Notice of Acceptance is attached. Our team will now prepare and lodge the registration with ASIC and keep you updated.",
+  "Approved With Conditions":
+    "Your company registration application has been approved, subject to the conditions below. Your signed Notice of Acceptance is attached. Please action the conditions so we can lodge the registration with ASIC.",
+  Declined:
+    "After reviewing your company registration application, we are unable to proceed with it. The reviewer's notes are below. Please contact us if you have any questions.",
+  "On Hold":
+    "Your company registration application has been placed on hold while we wait for more information. The reviewer's notes are below - please reply to this email with what is needed.",
+};
+
+/**
+ * Review & Decision on a Company Registration: email the client (every decision)
+ * and send the staff "decision log". The Notice of Acceptance PDF is attached to
+ * both when the application was approved.
+ * Throws on failure (the caller logs it; the decision itself is already saved).
+ *
+ * @param {object} info - { email, name, reference, companyName, decision, status, staffName,
+ *                          notes, conditions, recordId, attachments }
+ */
+const sendCompanyDecisionEmails = async ({
+  email,
+  name,
+  reference,
+  companyName,
+  decision,
+  status,
+  staffName,
+  notes,
+  conditions,
+  recordId,
+  attachments = [],
+}) => {
+  const { appUrl } = mailConfig();
+  const staff = await getStaffRecipients("new-company");
+  const rows = [
+    ["Application", "Company Registration"],
+    ["Proposed company name", companyName],
+    ["Decision", decision],
+    ["Reviewed by", staffName],
+  ];
+  if (conditions && decision === "Approved With Conditions") rows.push(["Conditions", conditions]);
+
+  if (email) {
+    const client = await renderEmail({
+      preheader: `Your company registration application (${reference}): ${decision}.`,
+      heading: `Application update: ${decision}`,
+      intro: `Dear ${name || "client"}, ${
+        COMPANY_DECISION_INTROS[decision] ||
+        `the status of your company registration application is now "${status || decision}".`
+      }`,
+      reference,
+      rows,
+      quote: notes || undefined,
+      footnote: "You're receiving this because you submitted a company registration application on our website.",
+    });
+    await sendMail({
+      to: email,
+      replyTo: staff.to[0] || undefined,
+      subject: `Company Registration ${decision} - Financially Up (Ref: ${reference})`,
+      html: client.html,
+      text: client.text,
+      attachments,
+    });
+  }
+
+  if (staff.to.length) {
+    const log = await renderEmail({
+      preheader: `${reference} -> ${decision} by ${staffName}`,
+      heading: "Company Registration decision recorded",
+      intro: `${staffName} recorded a decision on ${companyName || reference}.${
+        email ? ` The client (${email}) has been emailed.` : " No client email address is on file."
+      }`,
+      reference,
+      rows: [...rows, ["Status", status], ["Client", name], ["Client email", email]],
+      quote: notes || undefined,
+      cta: recordId ? { label: "Open in admin", url: `${appUrl}/admin/company-registration-new?open=${recordId}` } : undefined,
+    });
+    await sendMail({
+      to: staff.to,
+      cc: staff.cc,
+      bcc: staff.bcc,
+      subject: `[DECISION LOG] Company Registration ${reference} -> ${decision}`,
+      html: log.html,
+      text: log.text,
+      attachments,
+    });
+  }
+  return true;
 };
 
 module.exports = {
   sendEnquiryStaffAlert,
   sendEnquiryConfirmation,
   sendApplicationStaffAlert,
+  sendCompanyApplicationReceipt,
+  sendCompanyDecisionEmails,
 };

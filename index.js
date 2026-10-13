@@ -103,6 +103,38 @@ const initDatabase = async (retries = 3, delayMs = 3000) => {
         await sequelize.query("ALTER TABLE new_individual_engagements ADD COLUMN tfnExplanation TEXT NULL").catch(() => {});
         await sequelize.query("ALTER TABLE new_individual_engagements ADD COLUMN incomeActivities JSON NULL").catch(() => {});
         await sequelize.query("ALTER TABLE new_individual_engagements ADD COLUMN basScope VARCHAR(100) NULL").catch(() => {});
+        // Trash: ENUM status columns must allow "Trash" (values taken from the models)
+        for (const Model of [require("./models").NewIndividualEngagement, require("./models").NewCompanyRegistration]) {
+          const attr = Model.rawAttributes.status;
+          const table = Model.getTableName();
+          const [[column]] = await sequelize.query(`SHOW COLUMNS FROM \`${table}\` LIKE 'status'`);
+          if (column && !/'Trash'/.test(column.Type)) {
+            const values = attr.values.map((v) => sequelize.escape(v)).join(",");
+            await sequelize
+              .query(`ALTER TABLE \`${table}\` MODIFY COLUMN status ENUM(${values}) NOT NULL DEFAULT ${sequelize.escape(attr.defaultValue)}`)
+              .catch((error) => console.warn(`Could not add "Trash" to ${table}.status:`, error.message));
+          }
+        }
+        // PDF history: what each PDF was built from (Regenerate PDFs)
+        for (const table of ["new_individual_pdfs", "new_company_pdfs"]) {
+          await sequelize.query(`ALTER TABLE ${table} ADD COLUMN snapshot LONGTEXT NULL`).catch(() => {});
+        }
+        // Company Registration: Notice of Acceptance PDF (client + reviewer signatures)
+        {
+          const { NewCompanyRegistration } = require("./models");
+          const NewCompanyPdf = require("./models/NewCompanyPdf");
+          await sequelize
+            .query(`ALTER TABLE \`${NewCompanyRegistration.getTableName()}\` ADD COLUMN acceptancePdfPath TEXT NULL`)
+            .catch(() => {});
+          const pdfTable = NewCompanyPdf.getTableName();
+          const [[typeColumn]] = await sequelize.query(`SHOW COLUMNS FROM \`${pdfTable}\` LIKE 'type'`);
+          if (typeColumn && !/'Acceptance'/.test(typeColumn.Type)) {
+            const values = NewCompanyPdf.rawAttributes.type.values.map((v) => sequelize.escape(v)).join(",");
+            await sequelize
+              .query(`ALTER TABLE \`${pdfTable}\` MODIFY COLUMN type ENUM(${values}) NOT NULL`)
+              .catch((error) => console.warn(`Could not add "Acceptance" to ${pdfTable}.type:`, error.message));
+          }
+        }
         // Newsletter: subscriber name
         await sequelize.query("ALTER TABLE newsletter_subscribers ADD COLUMN name VARCHAR(120) NULL AFTER id").catch(() => {});
         // Users: forced password change after an admin sets the password

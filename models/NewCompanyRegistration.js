@@ -32,7 +32,8 @@ const NewCompanyRegistration = sequelize.define("new_company_registrations", {
       "Approved With Conditions",
       "Declined",
       "On Hold",
-      "Lodged with ASIC"
+      "Lodged with ASIC",
+      "Trash"
     ),
     allowNull: false,
     defaultValue: "Submitted",
@@ -243,6 +244,8 @@ const NewCompanyRegistration = sequelize.define("new_company_registrations", {
   /* ─── PDF Quick-Access Paths ─── */
   clientPdfPath: { type: DataTypes.TEXT, allowNull: true },
   adminPdfPath: { type: DataTypes.TEXT, allowNull: true },
+  // Notice of Acceptance (client + reviewer signatures), made when the application is approved
+  acceptancePdfPath: { type: DataTypes.TEXT, allowNull: true },
 });
 
 module.exports = NewCompanyRegistration;

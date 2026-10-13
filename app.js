@@ -29,6 +29,8 @@ const permissionRoutes = require("./routes/permission.routes");
 const auditRoutes = require("./routes/audit.routes");
 const settingRoutes = require("./routes/setting.routes");
 const departmentRoutes = require("./routes/department.routes");
+const trashRoutes = require("./routes/trash.routes");
+const pdfRegenerateRoutes = require("./routes/pdfRegenerate.routes");
 const emailSettingsRoutes = require("./routes/emailSettings.routes");
 
 // Import Application Route files
@@ -192,6 +194,8 @@ app.use("/api/permissions", permissionRoutes);
 app.use("/api/audit-logs", auditRoutes);
 app.use("/api/settings", settingRoutes);
 app.use("/api/departments", departmentRoutes);
+app.use("/api/trash", trashRoutes);
+app.use("/api/pdf-regenerate", pdfRegenerateRoutes);
 app.use("/api/email-settings", emailSettingsRoutes);
 
 // Operational Form and Application Routes
